@@ -5,16 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["pages build and deployment"]
-    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   test:
-    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,25 +30,26 @@ jobs:
         run: node tests/check-photos.mjs
 
   live:
-    # Runs after GitHub Pages finishes deploying: exercises the real public site.
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    # After a push to main, wait until GitHub Pages serves this exact commit, then test the real site.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Install Playwright
-        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
-      - name: Live site serves this commit's app
+      - name: Wait for Pages to serve this commit
         run: |
           url="https://bobloblaw55.github.io/Idc-app/"
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$url") && [ "$code" = 200 ] && break
-            sleep 10
+          want=$(sha256sum js/app.js | cut -d' ' -f1)
+          for i in $(seq 1 40); do
+            got=$(curl -sf "${url}js/app.js?cb=$RANDOM" | sha256sum | cut -d' ' -f1 || true)
+            [ "$got" = "$want" ] && echo "Live site serves this commit." && exit 0
+            sleep 15
           done
-          curl -sf "${url}js/app.js" | head -c 200
+          echo "Pages never served this commit's app.js" && exit 1
+      - name: Install Playwright
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
       - name: Two-tab end-to-end test (live site)
         run: node tests/e2e.mjs https://bobloblaw55.github.io/Idc-app/

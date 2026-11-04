@@ -66,4 +66,4 @@ node tests/e2e.mjs http://localhost:8765/      # two-tab end-to-end (needs playw
 node tests/check-photos.mjs                    # every food photo URL resolves (needs internet)
 ```
 
-CI (`.github/workflows/verify.yml`) runs all three on every push, then runs the e2e suite again against the live GitHub Pages site after each deploy.
+CI (`.github/workflows/verify.yml`) runs all three on every push, then waits for GitHub Pages to serve the new commit and runs the e2e suite against the live site.
