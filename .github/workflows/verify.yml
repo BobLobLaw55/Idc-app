@@ -1,0 +1,58 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Engine unit tests (acceptance tests 1–12)
+        run: node --test tests/*.test.mjs
+      - name: Install Playwright
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Two-tab end-to-end test (local build)
+        run: |
+          python3 -m http.server 8765 >/dev/null 2>&1 &
+          sleep 1
+          node tests/e2e.mjs http://localhost:8765/
+      - name: Food photo URLs resolve
+        run: node tests/check-photos.mjs
+
+  live:
+    # Runs after GitHub Pages finishes deploying: exercises the real public site.
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Live site serves this commit's app
+        run: |
+          url="https://bobloblaw55.github.io/Idc-app/"
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url") && [ "$code" = 200 ] && break
+            sleep 10
+          done
+          curl -sf "${url}js/app.js" | head -c 200
+      - name: Two-tab end-to-end test (live site)
+        run: node tests/e2e.mjs https://bobloblaw55.github.io/Idc-app/
