@@ -61,7 +61,7 @@ const RAW = [
   ['fishtacos', 'Fish Tacos', 'Seafood', 'casual grab', 0, 'fish', '1512838243191-e81e8f66f1fd'],
   ['crabcakes', 'Crab Cakes', 'Seafood', 'date fancy casual', 0, 'shellfish egg gluten', '1559742811-822873691df8'],
   ['seafoodpasta', 'Seafood Pasta', 'Seafood', 'date fancy', 0, 'shellfish gluten dairy', '1563379926898-05f4575a45d8'],
-  ['oysters', 'Oysters', 'Seafood', 'date fancy', 0, 'shellfish', '1606731219412-213c1e68b0f6'],
+  ['oysters', 'Oysters', 'Seafood', 'date fancy', 0, 'shellfish', '1599021456807-25db0f974333'],
   ['mahi', 'Blackened Fish', 'Seafood', 'date casual', 0, 'fish', '1519708227418-c8fd9a32b7a2'],
   // ── Asian
   ['ramen', 'Ramen', 'Asian', 'casual couch', 1, 'gluten egg soy', '1569718212165-3a8278d5f624'],
@@ -87,7 +87,7 @@ const RAW = [
   ['medbowl', 'Mediterranean Bowls', 'Mediterranean', 'casual grab deliver', 1, 'sesame', '1540420773420-3366772f4999'],
   ['gyro', 'Gyros', 'Mediterranean', 'casual couch grab deliver', 0, 'gluten dairy', '1529006557810-274b9b2fc783'],
   ['kebab', 'Kebabs', 'Mediterranean', 'date casual', 0, '', '1603360946369-dc9bb6258143'],
-  ['falafel', 'Falafel', 'Mediterranean', 'casual grab deliver', 1, 'sesame gluten', '1593001874117-c99c800e3eb7'],
+  ['falafel', 'Falafel', 'Mediterranean', 'casual grab deliver', 1, 'sesame gluten', '1540420773420-3366772f4999'],
   ['poke', 'Poke Bowls', 'Bowls', 'casual grab deliver', 0, 'fish soy sesame', '1546069901-ba9599a7e63c'],
   ['grainbowl', 'Grain Bowls', 'Bowls', 'casual grab deliver', 1, '', '1512621776951-a57141f2eefd'],
   ['vegentree', 'Vegetarian Entrées', 'Vegetarian', 'date casual', 1, '', '1540189549336-e6e99c3679fe'],
