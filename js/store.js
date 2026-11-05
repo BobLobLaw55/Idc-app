@@ -46,6 +46,10 @@ export function load() {
         if (s.session && !s.session.vibes) s.session = null; // pre-"up for" session format
         if (s.session) for (const p of ['A', 'B']) s.session.vibes[p] = normalizeVibes(s.session.vibes[p]);
         if (s.session && !s.session.lube) s.session.lube = { A: !!s.session.settings?.drinks, B: false };
+        if (s.session && !s.session.votes) {
+          const e = s.session.eliminations || {};
+          s.session.votes = { A: e.A ? { type: 'veto', id: e.A } : null, B: e.B ? { type: 'veto', id: e.B } : null };
+        }
         return s;
       }
     }

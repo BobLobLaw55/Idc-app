@@ -197,14 +197,18 @@ await check('Final Three is private: only your own matches, never your partner�
 
 await check('Votes private + Test 9: different vetoes → third wins', async () => {
   await A.getByRole('button', { name: `Eliminate ${names[0]}` }).click();
-  assert.match(await text(A), /Once you submit, it’s locked/);
-  await A.getByRole('button', { name: 'Yes, veto it' }).click();
+  // confirm appears ON THE SAME TILE, and the other choices are hidden while confirming
+  const tile = A.locator('.venue').first();
+  assert.match(await tile.innerText(), /Locked once you submit/);
+  assert.equal(await A.getByRole('button', { name: /^Really want / }).count(), 0);
+  await tile.getByRole('button', { name: 'Yes, eliminate it' }).click();
+  assert.equal(await A.getByRole('button', { name: /^Really want |^Eliminate / }).count(), 0, 'one move only');
   await B.waitForTimeout(150);
   const bT = await text(B);
   assert.ok(!/veto is locked/.test(bT), 'B must not see A’s veto');
   assert.equal(await B.locator('.venue.vetoed').count(), 0);
   await B.getByRole('button', { name: `Eliminate ${names[1]}` }).click();
-  await B.getByRole('button', { name: 'Yes, veto it' }).click();
+  await B.locator('.venue').nth(1).getByRole('button', { name: 'Yes, eliminate it' }).click();
   await A.waitForTimeout(300);
   assert.equal(await A.locator('.winner h1').innerText(), names[2]);
   assert.equal(await B.locator('.winner h1').innerText(), names[2]);
@@ -218,8 +222,8 @@ await check('Votes private + Test 9: different vetoes → third wins', async () 
 
 await check('Votes are exactly-once (no re-vote after submit)', async () => {
   const s = await state(A);
-  assert.equal(s.session.eliminations.A, s.session.candidates[0]);
-  assert.equal(await A.locator('[data-act="veto"]').count(), 0);
+  assert.deepEqual(s.session.votes.A, { type: 'veto', id: s.session.candidates[0] });
+  assert.equal(await A.locator('[data-act="vote"]').count(), 0);
 });
 
 await check('Test 12: replacement needs both approvals and avoids rejected places', async () => {

@@ -31,7 +31,8 @@ A two-person dinner decider. Each person swipes on foods (or taps **idc. You Kno
 | Love/Like/Neutral/Dislike/Never; allergies stored separately; vegetarian | ✅ Built |
 | Personal and shared restaurant blocks (shared needs both partners) | ✅ Built |
 | Matching: hard constraints, 60/15/10/10/5 ranking, weaker match counts most | ✅ Built |
-| The Final Three, private vetoes, deterministic tiebreak, backup | ✅ Built |
+| The Final Three: one private move each (Eliminate *or* Really want this!), confirmed on the tile; deterministic tiebreak; backup | ✅ Built |
+| Favorites fallback when tonight's cravings find fewer than three places | ✅ Built |
 | Replacement (both approve, never repeats tonight's rejects) | ✅ Built |
 | Visit feedback and history-aware ranking | ✅ Built (basic) |
 | Sync between two tabs on one device | ✅ Built (localStorage) |

@@ -32,9 +32,16 @@ A restaurant qualifies only with a **plan**: one method (dine-in / pickup / deli
 - **The Final Three and details (private):** “What you picked that they have”, meaning only your own matches, plus your drinks and the styles you fit. The only shared signal shown is “♥ You’re both up for <style>”. No partner dishes, drinks, “both wanted” tags or split-this suggestions, because those could sway your veto.
 - **Final screen (full reveal):** both dishes, “You both wanted this”, and “While you’re there”: appetizers you'll **both** like (both saved profiles Love/Like; a “Nah” tonight vetoes) and drinks, each shown **only if the place has them**.
 
+## Tonight first, then favorites
+- **Tonight tier:** if you swiped, a place qualifies only through something you answered Maybe, Hell Yes or Really Want. If you skipped, your saved profile *is* tonight.
+- **Favorites tier:** if tonight finds fewer than three places, the remaining slots are filled from both saved profiles (Love/Like). Styles, blocks, allergies, budget and hours still apply, and tonight's "Nah"s still veto. Those tiles say “From your favorites”. Only if both tiers together find fewer than three do we show “Slim pickings”.
+
 ## Decisions (`js/engine/decide.js`)
-- **Different vetoes:** the remaining restaurant wins. The backup comes from the larger pool and never resurrects a veto.
-- **Same veto:** the two survivors are re-scored and the stronger becomes primary, the other the backup. The factor differences are shown as the explanation.
+Each person makes **one** private move on The Final Three: **Eliminate** one place *or* **Really want this!** on one place. Never both, and the confirm happens on the tile itself.
+- **Vetoes always win:** nobody gets sent somewhere they eliminated, even if the other person really wanted it.
+- **A surviving “really want” wins.** If you both really want the same place, it wins. Two different ones go to a deterministic tiebreak between just those two.
+- **Two vetoes on different places:** the last one standing wins. **The same veto:** the two survivors are re-scored, and the stronger becomes primary, the other the backup.
+- **Backup:** the best remaining non-vetoed candidate, else the best of the wider pool.
 - **Replacement** (both approve): original backup → best match near the current pick → saved-favorites fallback → offer to widen the radius. Tonight's rejects are never repeated, and "closed/busy" is session-only.
 
 ## Phase plan

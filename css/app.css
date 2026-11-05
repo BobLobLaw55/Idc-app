@@ -148,6 +148,12 @@ input[type='text'], input[type='number'], input[type='time'], select {
 
 /* Restaurants */
 .venue { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 12px 0; }
+.venue.wanted { border-color: var(--pink); background: #2c1a26; }
+.confirm { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-top: 6px; }
+.confirm p { margin-bottom: 10px; }
+.btn.want { background: #3a1f33; color: #ffc6dc; border: 1px solid #6e3558; }
+.pill.veto { background: #3a1f25; color: #ffc2c2; border-color: #6e3540; }
+.pill.want { background: #3a1f33; color: #ffc6dc; border-color: #6e3558; }
 .venue.vetoed { border-color: var(--red); background: #2a1a1f; }
 .venue .facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }

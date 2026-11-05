@@ -9,9 +9,10 @@ export const CONFIG = {
   answerValue: { really: 100, yes: 85, maybe: 55, no: -Infinity },
   // Saved profile when the person skipped (or left cards unanswered)
   profileValue: { love: 80, like: 60, neutral: 25, dislike: 4, never: -Infinity },
-  // Saved profile for cards a person never saw after completing their swipes:
-  // tonight's explicit answers should dominate, but unseen foods are not rejections.
-  profileValueAfterSwipe: { love: 45, like: 32, neutral: 12, dislike: 2, never: -Infinity },
+  // Saved profile for foods a person didn't answer after swiping. Kept BELOW qualifyThreshold on
+  // purpose: tonight's matches come from tonight's answers. Unanswered foods aren't rejections —
+  // if tonight can't fill The Final Three, saved favorites take over (see finalThree fallback).
+  profileValueAfterSwipe: { love: 20, like: 12, neutral: 5, dislike: 1, never: -Infinity },
   qualifyThreshold: 30, // a person must have at least one dish scoring this high
   budgetSlack: 1.25, // restaurants above budget × slack are excluded
   verificationFactor: { dish: 1, category: 0.85, unverified: 0 },

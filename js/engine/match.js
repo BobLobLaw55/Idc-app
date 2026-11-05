@@ -200,7 +200,7 @@ export function pairDishes(r, ctx, values) {
  * Uses only that person's own answers/profile — nothing about the partner.
  */
 export function personalMatches(r, ctx, p, limit = 3) {
-  const value = valueFn(ctx.profiles[p], ctx.rounds?.[p]);
+  const value = valuesFor(ctx, r.id)?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p]);
   const opts = optionsFor(ctx.profiles[p], value, r).sort((x, y) => y.value - x.value);
   const strong = opts.filter((o) => o.value >= BOTH_WANT);
   return (strong.length ? strong : opts.slice(0, 1)).slice(0, limit);
@@ -221,12 +221,31 @@ export function appetizerOptions(r, ctx, limit = 3, { onlyBothLike = false } = {
     .slice(0, limit);
 }
 
+/**
+ * Saved-favorites values: ignores tonight's swipes, except tonight's explicit "Nah"s still count.
+ * Used when tonight's cravings can't fill The Final Three, and for replacements.
+ */
+export function favoriteValues(ctx) {
+  return Object.fromEntries(PEOPLE.map((p) => [p, valueFn(ctx.profiles[p], {
+    mode: 'skip',
+    answers: Object.fromEntries(Object.entries(ctx.rounds?.[p]?.answers || {}).filter(([, a]) => a === 'no')),
+  })]));
+}
+
+/** Values to judge restaurant `rid` by: favorites if it came from the fallback, else tonight's. */
+function valuesFor(ctx, rid, opts) {
+  if (opts?.values) return opts.values;
+  if (ctx.fallback?.includes(rid)) return favoriteValues(ctx);
+  return null;
+}
+
 /** Score one restaurant. Returns null if it fails a hard constraint. */
 export function scoreRestaurant(r, ctx, opts = {}) {
   const { plan } = placeCheck(r, ctx);
   if (!plan) return null;
   const s = ctx.settings;
-  const values = Object.fromEntries(PEOPLE.map((p) => [p, opts.values?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p])]));
+  const given = valuesFor(ctx, r.id, opts);
+  const values = Object.fromEntries(PEOPLE.map((p) => [p, given?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p])]));
   const bests = PEOPLE.map((p) => bestFor(ctx.profiles[p], values[p], r));
   if (bests.some((p) => !p || p.value < CONFIG.qualifyThreshold)) return null;
   // Ranking uses each person's best dish; the dishes we SHOW are paired to differ where possible.
@@ -248,7 +267,7 @@ export function scoreRestaurant(r, ctx, opts = {}) {
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
   const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan);
-  return { r, id: r.id, score, parts, picks, share, miles, plan, drinks: drinksOn(s, plan) ? drinkMatch(r, ctx) : null };
+  return { r, id: r.id, score, parts, picks, share, miles, plan, fromFavorites: !!given && !opts.values, drinks: drinksOn(s, plan) ? drinkMatch(r, ctx) : null };
 }
 
 export function rankRestaurants(ctx, opts) {
@@ -258,10 +277,20 @@ export function rankRestaurants(ctx, opts) {
     .sort((x, y) => y.score - x.score || x.id.localeCompare(y.id));
 }
 
-/** The Final Three + the rest of the pool (for backups). Never pads with fake matches. */
+/**
+ * The Final Three + the rest of the pool (for backups). Never pads with fake matches.
+ * If tonight's cravings give fewer than three places, the remaining slots are filled from your
+ * SAVED FAVORITES (still honoring styles, blocks, allergies, budget, hours and tonight's "Nah"s).
+ * Those ids are returned in `fallback`.
+ */
 export function finalThree(ctx) {
-  const ranked = rankRestaurants(ctx);
-  return { candidates: ranked.slice(0, 3).map((x) => x.id), pool: ranked.slice(3).map((x) => x.id), total: ranked.length };
+  const ranked = rankRestaurants({ ...ctx, fallback: [] }).map((x) => x.id);
+  let fav = [];
+  if (ranked.length < 3) {
+    fav = rankRestaurants({ ...ctx, fallback: [], sessionRejected: [...(ctx.sessionRejected || []), ...ranked] }, { values: favoriteValues(ctx) }).map((x) => x.id);
+  }
+  const all = [...ranked, ...fav];
+  return { candidates: all.slice(0, 3), pool: all.slice(3), total: all.length, tonight: ranked.length, fallback: fav };
 }
 
 /** Human-readable reasons a restaurant matched. */

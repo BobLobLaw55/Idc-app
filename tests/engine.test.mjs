@@ -6,7 +6,7 @@ import { FOODS, FOOD_BY_ID, UPSCALE } from '../js/data/foods.js';
 
 import { buildDeck, partnerFoods, adaptRemaining } from '../js/engine/deck.js';
 import { rankRestaurants, finalThree, scoreRestaurant, personalMatches, appetizerOptions } from '../js/engine/match.js';
-import { resolveEliminations, findReplacement } from '../js/engine/decide.js';
+import { resolveEliminations, resolveVotes, findReplacement } from '../js/engine/decide.js';
 
 const SEAFOOD = new Set(FOODS.filter((f) => f.group === 'Seafood').map((f) => f.id));
 const at7pm = new Date('2026-11-04T19:00:00');
@@ -349,6 +349,60 @@ test('No ranking boost for having appetizers or a bar; final list = appetizers y
   const both = appetizerOptions(r05, c, 3, { onlyBothLike: true });
   assert.deepEqual(both.map((a) => a.item.foods[0]), ['nachos']);
   assert.ok(appetizerOptions(r05, c).length > both.length);
+});
+
+test('Favorites fallback: fills The Final Three when tonight’s cravings come up short', () => {
+  const r = { A: swipe({ lamb: 'yes' }), B: swipe({ oysters: 'yes' }) }; // only one place has both
+  const p = { A: { prefs: { steak: 'love', burger: 'like', lamb: 'like' }, allergies: [] }, B: { prefs: { burger: 'love', salmon: 'like', oysters: 'like' }, allergies: [] } };
+  const c = ctx({ rounds: r, profiles: p, vibes: { A: ['fancy', 'casual'], B: ['fancy', 'casual'] } });
+  const f = finalThree(c);
+  assert.ok(f.tonight < 3, `tonight found ${f.tonight}`);
+  assert.equal(f.candidates.length, 3);
+  const fb = f.candidates.filter((id) => f.fallback.includes(id));
+  assert.equal(fb.length, 3 - f.tonight);
+  // fallback places still obey hard rules and are scored by saved favorites
+  for (const id of fb) {
+    const x = scoreRestaurant(RESTAURANTS.find((rr) => rr.id === id), { ...c, fallback: f.fallback });
+    assert.ok(x && x.fromFavorites, id);
+    assert.ok(x.plan.fits.A.length && x.plan.fits.B.length);
+  }
+  // tonight's "Nah" still beats a saved favorite in the fallback
+  const c2 = ctx({ rounds: { A: swipe({ lamb: 'yes', steak: 'no', burger: 'no' }), B: swipe({ oysters: 'yes' }) }, profiles: p, vibes: c.vibes });
+  const f2 = finalThree(c2);
+  for (const id of f2.fallback) {
+    const x = scoreRestaurant(RESTAURANTS.find((rr) => rr.id === id), { ...c2, fallback: f2.fallback });
+    assert.ok(!x.picks[0].item.foods.some((fd) => ['steak', 'burger'].includes(fd)), id);
+  }
+});
+
+test('Votes: veto OR really-want, resolved deterministically', () => {
+  const c = ctx({ vibes: { A: ['casual', 'fancy'], B: ['casual', 'fancy'] }, rounds: { A: swipe({ steak: 'yes' }), B: swipe({ burger: 'yes' }) } });
+  const f = finalThree(c);
+  const [x, y, z] = f.candidates;
+  const run = (A, B) => resolveVotes({ ...f, votes: { A, B } }, c);
+  const veto = (id) => ({ type: 'veto', id });
+  const want = (id) => ({ type: 'want', id });
+  // a really-want nobody vetoed wins
+  let res = run(want(x), veto(y));
+  assert.equal(res.winner, x);
+  assert.equal(res.backup, z);
+  // both really want the same → it wins
+  res = run(want(z), want(z));
+  assert.equal(res.winner, z);
+  assert.ok(res.reasons[0].includes('BOTH'));
+  // vetoes beat wants: B vetoes what A really wants → winner from the other two
+  res = run(want(x), veto(x));
+  assert.ok([y, z].includes(res.winner));
+  assert.notEqual(res.backup, x);
+  assert.ok(res.reasons.some((t) => t.includes('Vetoes win')));
+  // different wants → tiebreak between them; the third is never the winner
+  res = run(want(x), want(y));
+  assert.ok([x, y].includes(res.winner));
+  // plain vetoes still work as before
+  assert.equal(run(veto(x), veto(y)).winner, z);
+  assert.equal(run(veto(x), veto(x)).sameVote, true);
+  // deterministic
+  assert.deepEqual(run(want(x), want(y)), run(want(x), want(y)));
 });
 
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {

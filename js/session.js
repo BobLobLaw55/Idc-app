@@ -3,7 +3,7 @@ import { update, load } from './store.js';
 import { RESTAURANTS, DEMO_REGION } from './data/restaurants.js';
 import { buildDeck, partnerFoods, adaptRemaining } from './engine/deck.js';
 import { finalThree, PEOPLE } from './engine/match.js';
-import { resolveEliminations, findReplacement } from './engine/decide.js';
+import { resolveVotes, findReplacement } from './engine/decide.js';
 import { hashSeed } from './engine/rng.js';
 
 export const other = (p) => (p === 'A' ? 'B' : 'A');
@@ -19,6 +19,7 @@ export function ctxOf(s, extra = {}) {
     // Drinks rule applies if EITHER of you asked for it ("with lube").
     settings: s.session ? { ...s.session.settings, drinks: !!(s.session.lube?.A || s.session.lube?.B) } : undefined,
     vibes: s.session?.vibes || {},
+    fallback: s.session?.fallback || [], // Final Three places that came from saved favorites
     group: s.group,
     history: s.history,
     sessionRejected: s.session?.rejected || [],
@@ -50,7 +51,7 @@ export function startSession(me, vibes, lube = false) {
       settingsRequest: null,
       rounds: { A: emptyRound(), B: emptyRound() },
       candidates: null, pool: [], total: 0,
-      eliminations: { A: null, B: null },
+      votes: { A: null, B: null }, // each: { type: 'veto' | 'want', id }
       result: null,
       rejected: [],
       replacement: null,
@@ -93,7 +94,7 @@ export function setLube(me, on) {
     const ses = s.session;
     if (!ses || ses.result) return;
     ses.lube[me] = !!on;
-    if (ses.candidates) { ses.candidates = null; ses.eliminations = { A: null, B: null }; }
+    if (ses.candidates) { ses.candidates = null; ses.votes = { A: null, B: null }; }
   });
 }
 
@@ -103,7 +104,7 @@ export function setVibes(me, vibes) {
     const ses = s.session;
     if (!ses || ses.result || !vibes.length) return;
     ses.vibes[me] = [...vibes];
-    if (ses.candidates) { ses.candidates = null; ses.eliminations = { A: null, B: null }; }
+    if (ses.candidates) { ses.candidates = null; ses.votes = { A: null, B: null }; }
     resettle(s, [me]);
   });
 }
@@ -119,7 +120,7 @@ export function answerSettingsRequest(me, approve) {
     if (approve) {
       const wasGenerated = !!s.session.candidates;
       applySettings(s, req.changes);
-      if (wasGenerated) { s.session.eliminations = { A: null, B: null }; s.session.result = null; }
+      if (wasGenerated) { s.session.votes = { A: null, B: null }; s.session.result = null; }
     }
     s.session.settingsRequest = null;
   });
@@ -128,7 +129,7 @@ export function answerSettingsRequest(me, approve) {
 /** Broaden after too few matches: starter applies directly; partner sends a request. */
 export function broaden(me, changes) {
   const s = load();
-  if (s.session.startedBy === me) return update((st) => { applySettings(st, changes); st.session.eliminations = { A: null, B: null }; st.session.result = null; });
+  if (s.session.startedBy === me) return update((st) => { applySettings(st, changes); st.session.votes = { A: null, B: null }; st.session.result = null; });
   return requestSettings(me, changes, 'Broaden the search');
 }
 
@@ -230,6 +231,7 @@ export function generate() {
     ses.candidates = f.candidates;
     ses.pool = f.pool;
     ses.total = f.total;
+    ses.fallback = f.fallback; // filled from saved favorites because tonight's cravings came up short
     if (f.total > 0 && f.total < 3) ses.short = true;
   });
 }
@@ -245,18 +247,22 @@ export function acceptShortList() {
   });
 }
 
-export function eliminate(me, rid) {
+/** One vote each, exactly once: a veto OR a "really want" — never both. */
+export function castVote(me, type, rid) {
   return update((s) => {
     const ses = s.session;
-    if (!ses.candidates?.includes(rid) || ses.eliminations[me] || ses.result) return; // exactly once
-    ses.eliminations[me] = rid;
-    if (PEOPLE.every((p) => ses.eliminations[p])) {
-      ses.result = resolveEliminations(ses, ctxOf(s));
+    if (!['veto', 'want'].includes(type) || !ses.candidates?.includes(rid) || ses.votes[me] || ses.result) return;
+    ses.votes[me] = { type, id: rid };
+    if (PEOPLE.every((p) => ses.votes[p])) {
+      const names = { A: s.profiles.A.name, B: s.profiles.B.name };
+      ses.result = resolveVotes(ses, ctxOf(s), names);
       ses.rejected = [...new Set([...ses.rejected, ...ses.result.eliminated])];
       s.history.decisions.push({ restaurantId: ses.result.winner, at: new Date().toISOString() });
     }
   });
 }
+
+export const eliminate = (me, rid) => castVote(me, 'veto', rid);
 
 export function requestReplacement(me, reason) {
   return update((s) => {

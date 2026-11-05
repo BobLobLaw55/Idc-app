@@ -216,10 +216,11 @@ create table session_restaurant_candidates (
   primary key (session_id, restaurant_id)
 );
 
-create table session_eliminations (             -- exactly one vote per participant
+create table session_eliminations (             -- exactly one vote per participant: veto OR really-want
   session_id uuid references dining_sessions on delete cascade,
   user_id uuid references users,
   restaurant_id uuid references restaurants,
+  vote text not null default 'veto' check (vote in ('veto', 'want')),
   voted_at timestamptz not null default now(),
   primary key (session_id, user_id)
 );

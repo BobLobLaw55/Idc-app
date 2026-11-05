@@ -1,6 +1,5 @@
 // The Final Three elimination + replacement rules. Deterministic and evidence-based.
-import { rankRestaurants, scoreRestaurant, distanceMiles, PEOPLE } from './match.js';
-import { valueFn } from './prefs.js';
+import { rankRestaurants, scoreRestaurant, distanceMiles, favoriteValues, PEOPLE } from './match.js';
 import { CONFIG } from '../config.js';
 
 /** Tie-break between the two survivors when both partners eliminated the same restaurant. */
@@ -22,26 +21,74 @@ export function tiebreak(ids, ctx) {
   return { order: [x.id, y.id], reasons };
 }
 
-/**
- * Resolve both private eliminations.
- *  - Different eliminations → the one remaining restaurant wins automatically.
- *  - Same elimination → deterministic ranking picks primary + backup from the two survivors.
- * The backup never resurrects something eliminated tonight.
- */
-export function resolveEliminations(session, ctx) {
-  const { candidates, pool = [] } = session;
-  const votes = PEOPLE.map((p) => session.eliminations?.[p]);
-  if (votes.some((v) => !v)) return null;
-  const survivors = candidates.filter((id) => !votes.includes(id));
-  const eliminated = [...new Set(votes)];
-  if (eliminated.length === 2) {
-    const winner = survivors[0];
-    const backup = rankRestaurants({ ...ctx, sessionRejected: [...eliminated, winner] }).find((x) => pool.includes(x.id))?.id || null;
-    return { winner, backup, sameVote: false, eliminated, reasons: ['You each vetoed a different place, so the last one standing wins. No tiebreaker needed.'] };
-  }
-  const { order, reasons } = tiebreak(survivors, ctx);
-  return { winner: order[0], backup: order[1] || null, sameVote: true, eliminated, reasons };
+/** Order restaurant ids best-first by tonight's score (fallback places judged by favorites). */
+function rankIds(ids, ctx) {
+  const c = { ...ctx, sessionRejected: [] };
+  const sc = (id) => scoreRestaurant(ctx.restaurants.find((r) => r.id === id), c)?.score ?? -1;
+  return [...ids].sort((a, b) => sc(b) - sc(a) || a.localeCompare(b));
 }
+
+const vote = (session, p) => {
+  const v = session.votes?.[p];
+  if (v) return v;
+  const e = session.eliminations?.[p]; // older sessions
+  return e ? { type: 'veto', id: e } : null;
+};
+
+/**
+ * Resolve both private Final Three votes. Each person casts exactly ONE: a veto or a "really want".
+ *  - Vetoes always win: nobody is sent somewhere they eliminated.
+ *  - A surviving "really want" wins (two different ones → deterministic tiebreak between them).
+ *  - Two vetoes on different places → the last one standing wins.
+ *  - Same veto → deterministic tiebreak between the two survivors.
+ * The backup is the best remaining non-vetoed candidate, else the best of the wider pool.
+ */
+export function resolveVotes(session, ctx, names = { A: 'A', B: 'B' }) {
+  const { candidates, pool = [] } = session;
+  const vs = PEOPLE.map((p) => vote(session, p));
+  if (vs.some((v) => !v)) return null;
+  const vetoed = [...new Set(vs.filter((v) => v.type === 'veto').map((v) => v.id))];
+  const wantedAll = vs.filter((v) => v.type === 'want').map((v) => v.id);
+  const wanted = [...new Set(wantedAll.filter((id) => !vetoed.includes(id)))];
+  const alive = candidates.filter((id) => !vetoed.includes(id));
+  const nm = (id) => ctx.restaurants.find((r) => r.id === id)?.name || id;
+  const reasons = [];
+  let winner;
+  let tb = null;
+
+  PEOPLE.forEach((p, i) => {
+    const v = vs[i];
+    if (v.type === 'want' && vetoed.includes(v.id)) reasons.push(`${names[p]} really wanted ${nm(v.id)}, but it got vetoed. Vetoes win. Sorry, babe.`);
+  });
+
+  if (wanted.length === 1) {
+    winner = wanted[0];
+    reasons.push(wantedAll.length === 2 && wantedAll[0] === wantedAll[1]
+      ? `You BOTH really wanted ${nm(winner)}. Look at you two.`
+      : `Somebody really wanted ${nm(winner)} and nobody vetoed it. Done.`);
+  } else if (wanted.length === 2) {
+    tb = tiebreak(rankIds(wanted, ctx), ctx);
+    winner = tb.order[0];
+    reasons.push(`You each really wanted a different place, so we broke the tie between ${nm(wanted[0])} and ${nm(wanted[1])}.`, ...tb.reasons);
+  } else if (alive.length === 1) {
+    winner = alive[0];
+    reasons.push('You each vetoed a different place, so the last one standing wins. No tiebreaker needed.');
+  } else {
+    tb = tiebreak(rankIds(alive, ctx).slice(0, 2), ctx);
+    winner = tb.order[0];
+    reasons.push(...tb.reasons);
+  }
+
+  const rest = rankIds(alive.filter((id) => id !== winner), ctx);
+  const backup = rest[0]
+    || rankRestaurants({ ...ctx, sessionRejected: [...vetoed, winner] }).find((x) => pool.includes(x.id))?.id
+    || null;
+  const sameVote = vs.every((v) => v.type === 'veto') && vetoed.length === 1;
+  return { winner, backup, sameVote, eliminated: vetoed, wanted: wantedAll, reasons };
+}
+
+/** Back-compat name. */
+export const resolveEliminations = resolveVotes;
 
 /**
  * Find a replacement after both partners approve.
@@ -59,8 +106,7 @@ export function findReplacement(ctx, { current, backup, rejected }) {
     return { id: near[0].id, stage: 'nearby' };
   }
   // Expand to saved favorites (ignore tonight's swipes, but still honor tonight's "no"s and all hard rules).
-  const values = Object.fromEntries(PEOPLE.map((p) => [p, valueFn(ctx.profiles[p], { mode: 'skip', answers: Object.fromEntries(Object.entries(ctx.rounds?.[p]?.answers || {}).filter(([, a]) => a === 'no')) })]));
-  const fav = rankRestaurants(c, { values });
+  const fav = rankRestaurants(c, { values: favoriteValues(ctx) });
   if (fav.length) return { id: fav[0].id, stage: 'favorites' };
   return { id: null, stage: 'none' };
 }

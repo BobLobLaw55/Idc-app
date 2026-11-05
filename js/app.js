@@ -11,7 +11,7 @@ const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
 let state = load();
 let me = getSeat();
-const ui = { vibeDraft: [], lubeDraft: false, veto: null, handoff: false, reqDraft: null, lastRoute: null, reason: 'busy' };
+const ui = { vibeDraft: [], lubeDraft: false, vote: null, handoff: false, reqDraft: null, lastRoute: null, reason: 'busy' };
 
 // ───────────────────────── helpers
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -332,7 +332,7 @@ function fitsPrivate(scored) {
 function mineHtml(rid, scored) {
   if (!scored) return '<p class="small muted">This place no longer meets tonight’s rules.</p>';
   const list = personalMatches(RESTAURANT_BY_ID[rid], { ...ctxOf(state), sessionRejected: [] }, me);
-  const skipped = myRound()?.mode === 'skip' && !Object.keys(myRound()?.answers || {}).length;
+  const skipped = scored.fromFavorites || (myRound()?.mode === 'skip' && !Object.keys(myRound()?.answers || {}).length);
   return `<div class="mine"><b>${skipped ? 'Your favorites they have' : 'What you picked that they have'}</b>
     ${list.length ? `<ul>${list.map((o) => `<li>${esc(pickLabel(o))}</li>`).join('')}</ul>` : '<p class="small muted">Nothing you’d love — but something you can live with.</p>'}</div>`;
 }
@@ -383,25 +383,44 @@ screens.final = () => {
     ${c.map((id) => venueCard(id, false)).join('')}${requestPanel()}${broadenPanel()}
     ${btn(c.length === 1 ? 'Fine. Take me there →' : 'Pick the stronger one →', 'accept-short', { cls: 'wide big' })}`;
   }
-  const myVote = s.eliminations[me];
-  const partnerVoted = !!s.eliminations[other(me)];
+  const myVote = s.votes?.[me];
+  const partnerVoted = !!s.votes?.[other(me)];
   let action;
   if (s.result) action = btn('See where we’re going →', 'go', { arg: 'result', cls: 'wide big' });
-  else if (myVote) action = `<div class="notice ok">Your veto is locked in: <b>${esc(RESTAURANT_BY_ID[myVote].name)}</b>.</div><p class="muted" style="text-align:center" aria-live="polite">${partnerVoted ? 'Both in. Calculating…' : `Waiting on ${nameOf(other(me))}’s veto. Votes stay hidden until you both submit.`}</p>`;
-  else if (ui.veto) action = `<div class="panel" role="alertdialog" aria-label="Confirm elimination"><h2>Eliminate ${esc(RESTAURANT_BY_ID[ui.veto].name)}?</h2><p class="small muted">Once you submit, it’s locked. ${nameOf(other(me))} won’t see your choice until both votes are in.</p><div class="row">${btn('Yes, veto it', 'veto-confirm', { cls: 'danger' })}${btn('Wait, go back', 'veto-cancel', { cls: 'secondary' })}</div></div>`;
-  else action = `<p class="muted" style="text-align:center">Tap <b>Eliminate</b> on the one you’d rather not.</p>`;
-  return `${title('Results', 'The Final Three', 'Three restaurants. Two vetoes. One dinner.')}
+  else if (myVote) action = `<p class="muted" style="text-align:center" aria-live="polite">${partnerVoted ? 'Both in. Calculating…' : `Waiting on ${nameOf(other(me))}. Votes stay hidden until you both submit.`}</p>`;
+  else action = `<p class="small muted" style="text-align:center">One move each: <b>eliminate</b> one place <i>or</i> say you <b>really want</b> one. Not both.</p>`;
+  return `${title('Results', 'The Final Three', 'Three restaurants. One move each. One dinner.')}
+    ${!myVote && !s.result ? action : ''}
+    ${(() => { const fb = c.filter((id) => s.fallback?.includes(id)).length; const n = c.length - fb; return fb ? `<div class="notice">Tonight’s cravings only found ${n || 'zero'} match${n === 1 ? '' : 'es'}, so we filled in from your saved favorites.</div>` : ''; })()}
     ${c.map((id) => venueCard(id, !myVote && !s.result)).join('')}
-    ${action}`;
+    ${myVote || s.result ? action : ''}`;
 }
 
-function venueCard(id, canVeto) {
+/** One Final Three tile. Voting + confirming happens right here — no scrolling. */
+function venueCard(id, canVote) {
   const r = RESTAURANT_BY_ID[id];
   const sc = scoreOf(id);
-  const mineVetoed = ses().eliminations?.[me] === id || ui.veto === id;
-  return `<article class="venue ${mineVetoed ? 'vetoed' : ''}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">Demo</span></div>
+  const myVote = ses().votes?.[me];
+  const pending = ui.vote && ui.vote.id === id ? ui.vote : null;
+  const mineHere = myVote && myVote.id === id ? myVote : null;
+  const state = (pending || mineHere)?.type;
+  const cls = state === 'veto' ? 'vetoed' : state === 'want' ? 'wanted' : '';
+  let actions;
+  if (pending) {
+    const isVeto = pending.type === 'veto';
+    actions = `<div class="confirm" role="alertdialog" aria-label="Confirm">
+      <p><b>${isVeto ? `Eliminate ${esc(r.name)}?` : `Really want ${esc(r.name)}?`}</b><br><span class="small muted">Locked once you submit, and you ${isVeto ? 'can’t also pick a “really want”' : 'can’t also eliminate one'}. ${nameOf(other(me))} won’t see it until you’ve both voted.</span></p>
+      <div class="row">${btn(isVeto ? 'Yes, eliminate it' : 'Yes, I really want it', 'vote-confirm', { cls: isVeto ? 'small danger' : 'small' })}${btn('Never mind', 'vote-cancel', { cls: 'small secondary' })}</div></div>`;
+  } else if (mineHere) {
+    actions = `<div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}<span class="pill ${mineHere.type === 'veto' ? 'veto' : 'want'}">${mineHere.type === 'veto' ? '✕ You eliminated this' : '♥ You really want this'}</span></div>`;
+  } else {
+    actions = `<div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}${canVote && !ui.vote
+      ? btn('Eliminate', 'vote', { arg: `veto:${id}`, cls: 'small danger', aria: `Eliminate ${r.name}` }) + btn('Really want this!', 'vote', { arg: `want:${id}`, cls: 'small want', aria: `Really want ${r.name}` })
+      : ''}</div>`;
+  }
+  return `<article class="venue ${cls}" id="venue-${id}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">${sc?.fromFavorites ? 'From your favorites' : 'Demo'}</span></div>
     ${venueFacts(r, sc)}${fitsPrivate(sc)}${mineHtml(id, sc)}${drinksPrivate(sc)}
-    <div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}${canVeto ? btn('Eliminate', 'veto', { arg: id, cls: 'small danger', aria: `Eliminate ${r.name}` }) : ''}</div></article>`;
+    ${actions}</article>`;
 }
 
 screens.details = (rid) => {
@@ -435,7 +454,8 @@ screens.result = () => {
   const b = res.backup && RESTAURANT_BY_ID[res.backup];
   const m = sc?.plan?.method;
   const verb = m === 'dinein' ? 'Tonight you’re going to' : m === 'delivery' ? 'Tonight’s delivery is from' : m === 'pickup' ? 'Tonight’s pickup is from' : 'Tonight’s pick';
-  const votes = res.eliminated.length ? `<p class="small muted">Vetoes: ${['A', 'B'].map((p) => `${nameOf(p)} cut ${esc(RESTAURANT_BY_ID[s.eliminations[p]]?.name || '—')}`).join(' · ')}</p>` : '';
+  const vt = (p) => { const v = s.votes?.[p]; return v ? `${nameOf(p)} ${v.type === 'veto' ? 'cut' : 'really wanted'} ${esc(RESTAURANT_BY_ID[v.id]?.name || '—')}` : null; };
+  const votes = ['A', 'B'].some((p) => s.votes?.[p]) ? `<p class="small muted">Votes: ${['A', 'B'].map(vt).filter(Boolean).join(' · ')}</p>` : '';
   const rq = s.replacement;
   const fb = s.feedback[me] || {};
   let repl;
@@ -561,7 +581,7 @@ function act(name, arg) {
     case 'seat': me = arg; setSeat(arg); return go(defaultRoute());
     case 'handoff': ui.handoff = true; return render();
     case 'handoff-cancel': ui.handoff = false; return render();
-    case 'handoff-confirm': ui.handoff = false; ui.veto = null; ui.reqDraft = null; me = other(me); setSeat(me); route = null; return go(defaultRoute());
+    case 'handoff-confirm': ui.handoff = false; ui.vote = null; ui.reqDraft = null; me = other(me); setSeat(me); route = null; return go(defaultRoute());
     case 'vibe': {
       const sel = [...myVibes()];
       const i = sel.indexOf(arg);
@@ -594,9 +614,9 @@ function act(name, arg) {
     case 'submit': state = S.submit(me, false); return go('lobby');
     case 'unlock': state = S.unlock(me); return render();
     case 'generate': state = S.generate(); return go('final');
-    case 'veto': ui.veto = arg; return render();
-    case 'veto-cancel': ui.veto = null; return render();
-    case 'veto-confirm': state = S.eliminate(me, ui.veto); ui.veto = null; return state.session.result ? go('result') : render();
+    case 'vote': { const [type, id] = arg.split(':'); ui.vote = { type, id }; render(); document.getElementById(`venue-${id}`)?.querySelector('.confirm .btn')?.focus(); return undefined; }
+    case 'vote-cancel': ui.vote = null; return render();
+    case 'vote-confirm': state = S.castVote(me, ui.vote.type, ui.vote.id); ui.vote = null; return state.session.result ? go('result') : render();
     case 'accept-short': state = S.acceptShortList(); return go('result');
     case 'broaden': {
       state = S.broaden(me, JSON.parse(arg));
