@@ -157,6 +157,9 @@ input[type='text'], input[type='number'], input[type='time'], select {
 .fits { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
 .fits b { color: var(--pink); }
 .pill.plan { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.mine { background: var(--bg2); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin: 10px 0; }
+.mine b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 4px; }
+.mine ul, ul.plain { margin: 0; padding-left: 18px; }
 .drinks { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }
 .drinks b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .share { background: #2c1f2a; border: 1px dashed #6a3d52; border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }

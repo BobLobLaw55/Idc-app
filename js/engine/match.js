@@ -195,6 +195,31 @@ export function pairDishes(r, ctx, values) {
   return { picks, share };
 }
 
+/**
+ * PRIVATE view: what one person picked tonight that this place has (best first).
+ * Uses only that person's own answers/profile — nothing about the partner.
+ */
+export function personalMatches(r, ctx, p, limit = 3) {
+  const value = valueFn(ctx.profiles[p], ctx.rounds?.[p]);
+  const opts = optionsFor(ctx.profiles[p], value, r).sort((x, y) => y.value - x.value);
+  const strong = opts.filter((o) => o.value >= BOTH_WANT);
+  return (strong.length ? strong : opts.slice(0, 1)).slice(0, limit);
+}
+
+/**
+ * Appetizers on the menu that work for both of you (allergies, diet, Never), up to `limit`.
+ * Ones both SAVED profiles Love/Like come first and are flagged (a "Nah" tonight still vetoes).
+ */
+export function appetizerOptions(r, ctx, limit = 3) {
+  const bothLove = (f) => PEOPLE.every((p) => ['love', 'like'].includes(ctx.profiles[p].prefs?.[f]) && ctx.rounds?.[p]?.answers?.[f] !== 'no');
+  return r.menu
+    .filter((item) => item.verification !== 'unverified' && item.foods.some((f) => SHAREABLE.has(f))
+      && PEOPLE.every((p) => itemAllowed(ctx.profiles[p], item)))
+    .map((item) => ({ item, bothLove: item.foods.some((f) => SHAREABLE.has(f) && bothLove(f)) }))
+    .sort((x, y) => y.bothLove - x.bothLove || (x.item.price ?? 99) - (y.item.price ?? 99))
+    .slice(0, limit);
+}
+
 /** Score one restaurant. Returns null if it fails a hard constraint. */
 export function scoreRestaurant(r, ctx, opts = {}) {
   const { plan } = placeCheck(r, ctx);
@@ -221,7 +246,10 @@ export function scoreRestaurant(r, ctx, opts = {}) {
     verification: picks.reduce((t, p) => t + (p.item.verification === 'dish' ? 1 : 0.6), 0) / 2,
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
-  const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan);
+  // Small nudge toward places with a starter you can split and (when sitting down) a bar.
+  const drinkers = PEOPLE.some((p) => (ctx.profiles[p].drinks || []).length);
+  const extras = (appetizerOptions(r, ctx, 1).length ? 0.03 : 0) + (plan.method === 'dinein' && drinkers && r.bar?.length ? 0.03 : 0);
+  const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan) + extras;
   return { r, id: r.id, score, parts, picks, share, miles, plan, drinks: drinksOn(s, plan) ? drinkMatch(r, ctx) : null };
 }
 

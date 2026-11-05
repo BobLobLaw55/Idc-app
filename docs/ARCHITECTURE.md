@@ -16,7 +16,7 @@
 ## Matching (`js/engine/match.js`)
 Hard constraints: shared or personal blocks, rejected tonight, service method (delivery uses the delivery radius from the address), search radius, open at meal time (with a buffer before closing), budget × 1.25, and each person needs a qualifying dish (≥ 30).
 
-Ranking weights: food 60, distance 15, budget 10, hours 10, verification 5. Small adjustments for styles (shared style bonus, upscale dishes when fancy is in play, healthy dishes when Hot & Healthy is), past ratings, favorites, and a penalty for very recent picks.
+Ranking weights: food 60, distance 15, budget 10, hours 10, verification 5. Small extras for a splittable appetizer (+0.03) and a bar on sit-down plans when either of you drinks (+0.03). Small adjustments for styles (shared style bonus, upscale dishes when fancy is in play, healthy dishes when Hot & Healthy is), past ratings, favorites, and a penalty for very recent picks.
 
 ### Dish pairing (`pairDishes`)
 Ranking uses each person's best dish. The dishes **shown** are then paired so you each get something different when you want similar things. The pairing maximizes the same weaker-match-first score, minus a penalty for the same exact item (−22) or the same food category (−12). Example: you both say wings + steak → wings for one, steak for the other. A dish whose food you both wanted (yes/really tonight, or a saved Love/Like when skipping) is tagged “You both wanted this”. A shareable starter is suggested as “Split this” when **both saved profiles** have it as Love/Like and nobody said “Nah” to it tonight. Tonight's swipes don't add starters, and the suggestion never affects the ranking. If a place has only one dish that works for both of you, it's shown once as “For both of you”. These overlaps appear only after both of you submit.
@@ -27,6 +27,10 @@ Each partner privately picks **every** style they'd be happy with tonight: Dress
 A restaurant qualifies only with a **plan**: one method (dine-in / pickup / delivery) under which it satisfies at least one style from **each** person (`planFor`). The method is decided by the styles, so setup doesn't ask for it. Plans that hit a style you share rank higher than compromises. Style rules: fancy = upscale dine-in; casual = casual atmosphere (any method); quick = quick-service (dine-in or pickup); healthy = 2+ healthy dishes (any method); pickup/delivery = offers it. Each person's food cards follow only their own styles, so the partner's picks stay private until results.
 
 "Cocktails too?" applies only to dine-in plans: sit-down places must have a bar. Pickup and delivery plans ignore it.
+
+## What each person sees
+- **The Final Three and details (private):** “What you picked that they have”, meaning only your own matches, plus your drinks and the styles you fit. The only shared signal shown is “♥ You’re both up for <style>”. No partner dishes, drinks, “both wanted” tags or split-this suggestions, because those could sway your veto.
+- **Final screen (full reveal):** both dishes, “You both wanted this”, “Starters & drinks” (up to 3 appetizers that work for both of you, flagged when both profiles love them) and what the bar pours for each of you.
 
 ## Decisions (`js/engine/decide.js`)
 - **Different vetoes:** the remaining restaurant wins. The backup comes from the larger pool and never resurrects a veto.

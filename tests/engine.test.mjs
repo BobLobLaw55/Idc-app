@@ -5,7 +5,7 @@ import { RESTAURANTS, DEMO_REGION } from '../js/data/restaurants.js';
 import { FOODS, FOOD_BY_ID, UPSCALE } from '../js/data/foods.js';
 
 import { buildDeck, partnerFoods, adaptRemaining } from '../js/engine/deck.js';
-import { rankRestaurants, finalThree, scoreRestaurant } from '../js/engine/match.js';
+import { rankRestaurants, finalThree, scoreRestaurant, personalMatches, appetizerOptions } from '../js/engine/match.js';
 import { resolveEliminations, findReplacement } from '../js/engine/decide.js';
 
 const SEAFOOD = new Set(FOODS.filter((f) => f.group === 'Seafood').map((f) => f.id));
@@ -314,6 +314,26 @@ test('Up for: my card deck follows MY styles only (partner’s stay private)', (
   let up = 0;
   for (let s = 1; s <= 20; s++) up += buildDeck(c, 'A', { seed: s }).deck.filter((f) => UPSCALE.has(f)).length;
   assert.ok(up > 40, `fancy deck upscale cards ${up}`);
+});
+
+test('Private view: “what you picked that they have” uses only your own picks', () => {
+  const r01 = RESTAURANTS.find((r) => r.id === 'r01');
+  const c = ctx({ rounds: { A: swipe({ wings: 'yes', steak: 'really' }), B: swipe({ burger: 'really', salad: 'yes' }) } });
+  const mine = personalMatches(r01, c, 'A').map((o) => o.foodId);
+  assert.deepEqual(mine, ['steak', 'wings']);
+  // partner's answers can change completely without changing my view
+  const c2 = ctx({ rounds: { A: swipe({ wings: 'yes', steak: 'really' }), B: swipe({ tenders: 'yes' }) } });
+  assert.deepEqual(personalMatches(r01, c2, 'A').map((o) => o.foodId), mine);
+});
+
+test('Final screen: appetizer options respect both people’s hard rules', () => {
+  const r01 = RESTAURANTS.find((r) => r.id === 'r01');
+  const c = ctx({ profiles: { A: { prefs: { wings: 'love', loadedfries: 'like' }, allergies: [] }, B: { prefs: { loadedfries: 'love', wings: 'never' }, allergies: [] } } });
+  const apps = appetizerOptions(r01, c);
+  assert.ok(apps.length >= 1);
+  assert.ok(!apps.some((a) => a.item.foods.includes('wings')), 'B said Never to wings');
+  assert.equal(apps[0].item.foods[0], 'loadedfries');
+  assert.equal(apps[0].bothLove, true);
 });
 
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {

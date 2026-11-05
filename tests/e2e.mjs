@@ -178,6 +178,19 @@ await check('Back to details and back to The Final Three', async () => {
   assert.match(await text(A), /The Final Three/);
 });
 
+await check('Final Three is private: only your own matches, never your partner’s', async () => {
+  for (const pg of [A, B]) {
+    const t = await text(pg);
+    assert.match(t, /What you picked that they have|Your favorites they have/i);
+    assert.ok(!/For Partner|For You|You both wanted|Split this|Meets you in the middle/i.test(t), t.slice(0, 300));
+  }
+  const s = await state(A);
+  // B's screen must not list A's tonight-only cravings unless B also wanted them
+  const aYes = Object.entries(s.session.rounds.A.answers).filter(([, v]) => v === 'yes' || v === 'really').map(([k]) => k);
+  const bYes = Object.entries(s.session.rounds.B.answers).filter(([, v]) => v === 'yes' || v === 'really').map(([k]) => k);
+  assert.ok(aYes.length && !bYes.length);
+});
+
 await check('Votes private + Test 9: different vetoes → third wins', async () => {
   await A.getByRole('button', { name: `Eliminate ${names[0]}` }).click();
   assert.match(await text(A), /Once you submit, it’s locked/);
@@ -193,6 +206,10 @@ await check('Votes private + Test 9: different vetoes → third wins', async () 
   assert.equal(await B.locator('.winner h1').innerText(), names[2]);
   const s = await state(A);
   assert.equal(s.history.decisions.length, 1, 'decision recorded exactly once');
+  const rt = await text(A);
+  assert.match(rt, /For You/i);
+  assert.match(rt, /Appetizers to split/i);
+  assert.match(rt, /Cocktails, beer & wine/i);
   await shot(A, '08-result');
 });
 

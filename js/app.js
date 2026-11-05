@@ -4,7 +4,7 @@ import { other, ctxOf } from './session.js';
 import { VIBES, METHOD_LABEL, vibeNames } from './data/vibes.js';
 import { FOODS, FOOD_BY_ID, GROUPS, ALLERGENS, photoUrl, foodName } from './data/foods.js';
 import { RESTAURANTS, RESTAURANT_BY_ID } from './data/restaurants.js';
-import { scoreRestaurant, pickLabel, distanceMiles, DRINKS } from './engine/match.js';
+import { scoreRestaurant, pickLabel, distanceMiles, DRINKS, personalMatches, appetizerOptions, drinkMatch } from './engine/match.js';
 import { LEVELS, prefOf } from './engine/prefs.js';
 
 const app = document.getElementById('app');
@@ -294,15 +294,21 @@ function venueFacts(r, scored) {
 const cap = (w) => w[0].toUpperCase() + w.slice(1);
 const DRINK_FOR_TWO = { beer: 'Beers for two', wine: 'Wine for two', cocktails: 'Cocktails for two' };
 
-/** "Cocktails too?" line: what each of you would drink here. Only on drinks nights. */
-function drinksHtml(scored) {
-  const d = scored?.drinks;
-  if (!d) return '';
-  const lines = d.per.map((p, i) => {
-    if (!p.likes.length) return null;
-    return `${nameOf(i ? 'B' : 'A')}: ${p.served.length ? p.served.map(cap).join(' or ') : `no ${p.likes.join(' or ')} here`}`;
-  }).filter(Boolean);
-  return `<div class="drinks"><b>🍸 At the bar</b>${d.bar.map(cap).join(' · ')}${lines.length ? `<span class="small muted" style="display:block">${lines.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}</div>`;
+/** Final screen: starters to split + what the bar pours for each of you. */
+function extrasHtml(r, sc) {
+  const c = { ...ctxOf(state), sessionRejected: [] };
+  const apps = appetizerOptions(r, c);
+  const d = drinkMatch(r, c);
+  const dineIn = sc?.plan?.method === 'dinein';
+  const per = d.per.map((p, i) => (p.likes.length ? `${nameOf(i ? 'B' : 'A')}: ${p.served.length ? p.served.map(cap).join(' or ') : `no ${p.likes.join(' or ')} here`}` : null)).filter(Boolean);
+  return `<div class="panel"><h2>Starters & drinks</h2>
+    <div class="share"><b>Appetizers to split</b>${apps.length
+      ? `<ul class="plain">${apps.map((a) => `<li>${esc(pickLabel({ item: a.item, foodId: a.item.foods[0] }))}${a.item.price ? ` · $${a.item.price}` : ''}${a.bothLove ? ' <span class="both">♥ You both love these</span>' : ''}</li>`).join('')}</ul>`
+      : '<span class="small muted">No starters on this menu that work for both of you.</span>'}</div>
+    <div class="drinks"><b>🍸 Cocktails, beer & wine</b>${d.bar.length
+      ? `${d.bar.map(cap).join(' · ')}${per.length ? `<span class="small muted" style="display:block">${per.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}${dineIn ? '' : '<span class="hint" style="display:block">Alcohol to go depends on local law and the restaurant — check before you count on it.</span>'}`
+      : '<span class="small muted">No alcohol here. Bring your own vibe.</span>'}</div>
+  </div>`;
 }
 
 /** Which of each person's styles this plan satisfies (shown only after both submitted). */
@@ -315,9 +321,36 @@ function fitsHtml(scored) {
   return parts.length ? `<p class="fits">Meets you in the middle — ${parts.join(' · ')}</p>` : '';
 }
 
-function pairHtml(scored) {
+// ── PRIVATE views (Final Three + details): only YOUR side. Nothing about your partner's picks,
+//    except a style you're both up for.
+function fitsPrivate(scored) {
+  const pl = scored?.plan;
+  if (!pl) return '';
+  if (pl.shared.length) return `<p class="fits">♥ You’re both up for <b>${esc(vibeNames(pl.shared).join(' & '))}</b></p>`;
+  const mine = pl.fits[me] || [];
+  return mine.length ? `<p class="fits">Fits what you’re up for: <b>${esc(vibeNames(mine).join(' / '))}</b></p>` : '';
+}
+
+function mineHtml(rid, scored) {
   if (!scored) return '<p class="small muted">This place no longer meets tonight’s rules.</p>';
-  const sh = scored.share;
+  const list = personalMatches(RESTAURANT_BY_ID[rid], { ...ctxOf(state), sessionRejected: [] }, me);
+  const skipped = myRound()?.mode === 'skip' && !Object.keys(myRound()?.answers || {}).length;
+  return `<div class="mine"><b>${skipped ? 'Your favorites they have' : 'What you picked that they have'}</b>
+    ${list.length ? `<ul>${list.map((o) => `<li>${esc(pickLabel(o))}</li>`).join('')}</ul>` : '<p class="small muted">Nothing you’d love — but something you can live with.</p>'}</div>`;
+}
+
+function drinksPrivate(scored) {
+  const d = scored?.drinks;
+  if (!d) return '';
+  const mine = d.per[me === 'A' ? 0 : 1];
+  const line = !mine.likes.length ? '' : mine.served.length ? `${mine.served.map(cap).join(' or ')} for you` : `None of your picks (${mine.likes.join(', ')})`;
+  return `<div class="drinks"><b>🍸 At the bar</b>${d.bar.map(cap).join(' · ')}${line ? `<span class="small muted" style="display:block">${esc(line)}</span>` : ''}</div>`;
+}
+
+// ── FULL reveal (final screen only)
+function pairHtml(scored, { share = true } = {}) {
+  if (!scored) return '<p class="small muted">This place no longer meets tonight’s rules.</p>';
+  const sh = share ? scored.share : null;
   const [a, b] = scored.picks;
   if (a.item.id === b.item.id) {
     return `<div class="pair one"><div><b>For both of you</b>${esc(pickLabel(a))}<span class="both">${a.bothWanted ? '♥ You both wanted this — the only match you share here' : 'The one dish here that works for both of you'}</span></div></div>
@@ -369,7 +402,7 @@ function venueCard(id, canVeto) {
   const sc = scoreOf(id);
   const mineVetoed = ses().eliminations?.[me] === id || ui.veto === id;
   return `<article class="venue ${mineVetoed ? 'vetoed' : ''}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">Demo</span></div>
-    ${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}
+    ${venueFacts(r, sc)}${fitsPrivate(sc)}${mineHtml(id, sc)}${drinksPrivate(sc)}
     <div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}${canVeto ? btn('Eliminate', 'veto', { arg: id, cls: 'small danger', aria: `Eliminate ${r.name}` }) : ''}</div></article>`;
 }
 
@@ -380,7 +413,7 @@ screens.details = (rid) => {
   const pend = state.group.pendingExclusions[rid];
   const vb = { dish: 'Verified dish', category: 'Category only', unverified: 'Unverified — not used' };
   return `${title(esc(r.cuisine), esc(r.name), `${r.atmosphere.join(' · ')} · fictional demo restaurant`)}
-  ${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}
+  ${venueFacts(r, sc)}${fitsPrivate(sc)}${mineHtml(rid, sc)}${drinksPrivate(sc)}
   <div class="panel"><h2>Menu (demo)</h2>${r.menu.map((m) => `<div class="pref-row"><span>${esc(m.name || foodName(m.foods[0]))}${m.price ? ` · $${m.price}` : ''}</span><span class="pill">${vb[m.verification]}</span></div>`).join('')}
     <p class="hint">Source: ${esc(r.source)} · verified ${esc(r.verifiedOn)} · Menu link: none (not a real restaurant).</p></div>
   <div class="panel small"><b>Drinks (demo):</b> ${r.bar.length ? r.bar.map(cap).join(' · ') : 'No alcohol served'}</div>
@@ -412,7 +445,8 @@ screens.result = () => {
   else if (rq) repl = `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants a replacement</b> (${esc({ busy: 'too busy', closed: 'it’s closed', changed: 'changed our minds', other: 'other' }[rq.reason])}).<div class="row" style="margin-top:8px">${btn('Approve', 'repl-answer', { arg: 'yes', cls: 'small' })}${btn('No, we’re going', 'repl-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
   else repl = `<label class="field" for="why">Why?</label><select id="why" data-change="reason">${[['busy', 'Too busy'], ['closed', 'It’s closed'], ['changed', 'Changed our minds'], ['other', 'Other']].map(([k, l]) => `<option value="${k}" ${ui.reason === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div style="margin-top:10px">${btn('Offer a Replacement', 'repl-request', { cls: 'wide secondary' })}</div><p class="hint">Both of you have to approve. Tonight’s vetoes stay vetoed. A “closed” or “busy” report only applies to tonight.</p>`;
-  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}</div>
+  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc, { share: false })}</div>
+  ${extrasHtml(r, sc)}
   ${res.sameVote ? `<div class="notice">You both vetoed the same place. A shocking development in the ‘I don’t care’ household.</div>` : ''}
   <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}${sc && (sc.share || sc.picks.some((p) => p.bothWanted)) ? '<li>You two actually agreed on something. Mark the calendar.</li>' : ''}</ul>${votes}</div>
   ${b ? `<div class="panel"><div class="eyebrow">Backup</div><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.cuisine)} · ~$${b.price}/person</p></div>` : '<div class="panel small muted">No backup available under tonight’s rules.</div>'}
