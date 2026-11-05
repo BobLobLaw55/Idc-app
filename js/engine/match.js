@@ -143,7 +143,8 @@ function optionsFor(profile, value, r) {
 /**
  * Pick one dish per person, preferring DIFFERENT dishes when you want similar things
  * (you said wings + steak, she said steak + wings → wings for one, steak for the other).
- * Also flags dishes you both wanted and suggests a shareable starter you both wanted.
+ * Also flags dishes you both wanted, and suggests a shareable starter both saved profiles like.
+ * The starter is display-only: it never affects which restaurant ranks higher.
  */
 export function pairDishes(r, ctx, values) {
   const [oa, ob] = PEOPLE.map((p) => optionsFor(ctx.profiles[p], values[p], r));
@@ -160,10 +161,14 @@ export function pairDishes(r, ctx, values) {
   const both = (f) => values.A(f) >= BOTH_WANT && values.B(f) >= BOTH_WANT;
   const picks = [best.a, best.b].map((p) => ({ ...p, bothWanted: p.item.foods.some(both) }));
   const used = new Set(picks.map((p) => p.item.id));
+  // Appetizers to split come from your SAVED profiles (both Love/Like), not tonight's swipes.
+  // The only thing tonight can do is veto it: an explicit "Nah" tonight still wins.
+  const bothLikeSaved = (f) => PEOPLE.every((p) => ['love', 'like'].includes(ctx.profiles[p].prefs?.[f])
+    && ctx.rounds?.[p]?.answers?.[f] !== 'no');
   const share = r.menu
     .filter((item) => !used.has(item.id) && item.verification !== 'unverified'
       && PEOPLE.every((p) => itemAllowed(ctx.profiles[p], item))
-      && item.foods.some((f) => SHAREABLE.has(f) && both(f)))
+      && item.foods.some((f) => SHAREABLE.has(f) && bothLikeSaved(f)))
     .sort((x, y) => (y.verification === 'dish') - (x.verification === 'dish') || (x.price ?? 99) - (y.price ?? 99))[0] || null;
   return { picks, share };
 }

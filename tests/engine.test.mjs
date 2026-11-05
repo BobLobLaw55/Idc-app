@@ -244,12 +244,23 @@ test('Pairing: same dish only when nothing else works', () => {
   assert.equal(top.picks[1].foodId, 'ribeye');
 });
 
-test('Pairing: a shareable starter you both wanted is suggested to split', () => {
-  const c = ctx({ rounds: { A: swipe({ steak: 'really', loadedfries: 'yes' }), B: swipe({ burger: 'really', loadedfries: 'yes' }) } });
-  const grill = scoreRestaurant(RESTAURANTS.find((r) => r.id === 'r01'), c);
-  assert.ok(grill.share, 'should suggest splitting loaded fries');
-  assert.ok(grill.share.foods.includes('loadedfries'));
-  assert.ok(!grill.picks.some((p) => p.item.id === grill.share.id));
+test('Split-this starter comes from saved profiles, not tonight’s swipes', () => {
+  const r01 = RESTAURANTS.find((r) => r.id === 'r01');
+  const saved = (extra) => ({ prefs: { steak: 'love', burger: 'love', ...extra }, allergies: [] });
+  const swipes = { A: swipe({ steak: 'really' }), B: swipe({ burger: 'really' }) };
+  // both profiles like loaded fries → suggested even though nobody swiped on fries tonight
+  let x = scoreRestaurant(r01, ctx({ rounds: swipes, profiles: { A: saved({ loadedfries: 'like' }), B: saved({ loadedfries: 'love' }) } }));
+  assert.ok(x.share?.foods.includes('loadedfries'));
+  // both swiped YES on fries tonight but profiles don't like them → not suggested
+  x = scoreRestaurant(r01, ctx({ rounds: { A: swipe({ steak: 'really', loadedfries: 'yes' }), B: swipe({ burger: 'really', loadedfries: 'yes' }) }, profiles: { A: saved({}), B: saved({}) } }));
+  assert.equal(x.share, null);
+  // a "Nah" tonight still vetoes it
+  x = scoreRestaurant(r01, ctx({ rounds: { A: swipe({ steak: 'really', loadedfries: 'no' }), B: swipe({ burger: 'really' }) }, profiles: { A: saved({ loadedfries: 'love' }), B: saved({ loadedfries: 'love' }) } }));
+  assert.equal(x.share, null);
+  // and it never changes the restaurant's score
+  const base = ctx({ rounds: swipes, profiles: { A: saved({}), B: saved({}) } });
+  const withApp = ctx({ rounds: swipes, profiles: { A: saved({ loadedfries: 'like' }), B: saved({ loadedfries: 'like' }) } });
+  assert.equal(scoreRestaurant(r01, withApp).score, scoreRestaurant(r01, base).score);
 });
 
 test('Quick and Healthy vibes steer cards and places', () => {

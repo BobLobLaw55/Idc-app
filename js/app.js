@@ -319,10 +319,10 @@ function pairHtml(scored) {
   const [a, b] = scored.picks;
   if (a.item.id === b.item.id) {
     return `<div class="pair one"><div><b>For both of you</b>${esc(pickLabel(a))}<span class="both">${a.bothWanted ? '♥ You both wanted this — the only match you share here' : 'The one dish here that works for both of you'}</span></div></div>
-  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both agreed on this one</span></div>` : ''}`;
+  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both love these</span></div>` : ''}`;
   }
   return `<div class="pair">${scored.picks.map((p, i) => `<div><b>For ${nameOf(i ? 'B' : 'A')}</b>${esc(pickLabel(p))}${p.bothWanted ? '<span class="both">♥ You both wanted this</span>' : ''}</div>`).join('')}</div>
-  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both agreed on this one</span></div>` : ''}`;
+  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both love these</span></div>` : ''}`;
 }
 
 const scoreOf = (rid) => scoreRestaurant(RESTAURANT_BY_ID[rid], { ...ctxOf(state), sessionRejected: [] });
