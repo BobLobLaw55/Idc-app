@@ -39,7 +39,7 @@ function methodOk(r, method, ctx) {
   if (method === 'pickup' && !r.services.pickup) return false;
   if (method === 'delivery' && !(r.services.delivery && distanceMiles(s.deliveryAddress || s.location, r) <= r.deliveryRadius)) return false;
   if (!openAt(r, mealHour(s.time, ctx.now), method)) return false;
-  if (method === 'dinein' && s.drinks && !r.bar?.length) return false; // "Cocktails too?" → sit-down places need a bar
+  if (method === 'dinein' && s.drinks && !r.bar?.length) return false; // "With lube" → sit-down places need a bar
   return true;
 }
 
@@ -78,7 +78,7 @@ export function excludedFor(ctx, rid) {
 }
 
 export const DRINKS = ['beer', 'wine', 'cocktails'];
-/** "Cocktails too?" only matters when the plan is to sit down somewhere. */
+/** "With lube" (drinks) only matters when the plan is to sit down somewhere. */
 export const drinksOn = (s, plan) => !!s?.drinks && plan?.method === 'dinein';
 
 /** What each person would drink here, and what you both like that they pour. */
@@ -94,7 +94,7 @@ export function drinkMatch(r, ctx) {
 function drinkBonus(ctx, r, plan) {
   if (!drinksOn(ctx.settings, plan)) return 0;
   const m = drinkMatch(r, ctx);
-  let b = 0.02; // you asked for drinks and you're getting them
+  let b = 0;
   for (const p of m.per) if (p.likes.length) b += p.served.length ? 0.04 : -0.04;
   if (m.together.length) b += 0.02;
   return b;
@@ -210,12 +210,13 @@ export function personalMatches(r, ctx, p, limit = 3) {
  * Appetizers on the menu that work for both of you (allergies, diet, Never), up to `limit`.
  * Ones both SAVED profiles Love/Like come first and are flagged (a "Nah" tonight still vetoes).
  */
-export function appetizerOptions(r, ctx, limit = 3) {
+export function appetizerOptions(r, ctx, limit = 3, { onlyBothLike = false } = {}) {
   const bothLove = (f) => PEOPLE.every((p) => ['love', 'like'].includes(ctx.profiles[p].prefs?.[f]) && ctx.rounds?.[p]?.answers?.[f] !== 'no');
   return r.menu
     .filter((item) => item.verification !== 'unverified' && item.foods.some((f) => SHAREABLE.has(f))
       && PEOPLE.every((p) => itemAllowed(ctx.profiles[p], item)))
     .map((item) => ({ item, bothLove: item.foods.some((f) => SHAREABLE.has(f) && bothLove(f)) }))
+    .filter((a) => !onlyBothLike || a.bothLove)
     .sort((x, y) => y.bothLove - x.bothLove || (x.item.price ?? 99) - (y.item.price ?? 99))
     .slice(0, limit);
 }
@@ -246,10 +247,7 @@ export function scoreRestaurant(r, ctx, opts = {}) {
     verification: picks.reduce((t, p) => t + (p.item.verification === 'dish' ? 1 : 0.6), 0) / 2,
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
-  // Small nudge toward places with a starter you can split and (when sitting down) a bar.
-  const drinkers = PEOPLE.some((p) => (ctx.profiles[p].drinks || []).length);
-  const extras = (appetizerOptions(r, ctx, 1).length ? 0.03 : 0) + (plan.method === 'dinein' && drinkers && r.bar?.length ? 0.03 : 0);
-  const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan) + extras;
+  const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan);
   return { r, id: r.id, score, parts, picks, share, miles, plan, drinks: drinksOn(s, plan) ? drinkMatch(r, ctx) : null };
 }
 

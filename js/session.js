@@ -16,7 +16,8 @@ export function ctxOf(s, extra = {}) {
     restaurants: RESTAURANTS,
     profiles: s.profiles,
     rounds: s.session?.rounds || {},
-    settings: s.session?.settings,
+    // Drinks rule applies if EITHER of you asked for it ("with lube").
+    settings: s.session ? { ...s.session.settings, drinks: !!(s.session.lube?.A || s.session.lube?.B) } : undefined,
     vibes: s.session?.vibes || {},
     group: s.group,
     history: s.history,
@@ -26,7 +27,10 @@ export function ctxOf(s, extra = {}) {
   };
 }
 
-export function startSession(me, vibes) {
+/** Context for building ONE person's card deck: only their own drinks choice applies. */
+const deckCtx = (s, p) => ctxOf(s, { settings: { ...s.session.settings, drinks: !!s.session.lube?.[p] } });
+
+export function startSession(me, vibes, lube = false) {
   return update((s) => {
     const prof = s.profiles[me];
     s.session = {
@@ -35,13 +39,13 @@ export function startSession(me, vibes) {
       startedBy: me,
       createdAt: new Date().toISOString(),
       vibes: { A: [], B: [], [me]: [...vibes] }, // private per person: what each of you is up for
+      lube: { A: false, B: false, [me]: !!lube }, // private per person: "with lube" = drinks are a must
       settings: {
         budget: prof.budget ?? 25,
         time: { kind: 'asap', at: '19:00' },
         radius: prof.radius ?? DEMO_REGION.radius,
         location: { name: prof.home || DEMO_REGION.name, lat: DEMO_REGION.lat, lng: DEMO_REGION.lng },
         deliveryAddress: null,
-        drinks: false, // "Cocktails too?" (only matters if the plan is dine-in)
       },
       settingsRequest: null,
       rounds: { A: emptyRound(), B: emptyRound() },
@@ -63,7 +67,7 @@ function resettle(s, people = PEOPLE) {
     const r = s.session.rounds[p];
     if (!r.deck.length || r.status === 'ready') continue;
     const keep = r.deck.slice(0, r.pos);
-    const { deck, buckets } = buildDeck(ctxOf(s), p, { seed: hashSeed(s.session.seed, p, 'resettle', JSON.stringify(st), String(s.session.vibes[p])) });
+    const { deck, buckets } = buildDeck(deckCtx(s, p), p, { seed: hashSeed(s.session.seed, p, 'resettle', JSON.stringify(st), String(s.session.vibes[p])) });
     const fresh = deck.filter((id) => !keep.includes(id)).slice(0, r.deck.length - keep.length);
     r.deck = [...keep, ...fresh];
     r.buckets = { ...buckets, ...r.buckets };
@@ -80,6 +84,16 @@ export function setSettings(me, patch) {
   return update((s) => {
     if (!s.session || s.session.candidates) return;
     if (s.session.startedBy === me) applySettings(s, patch);
+  });
+}
+
+/** "With lube": I want drinks. Sit-down places then need a bar. */
+export function setLube(me, on) {
+  return update((s) => {
+    const ses = s.session;
+    if (!ses || ses.result) return;
+    ses.lube[me] = !!on;
+    if (ses.candidates) { ses.candidates = null; ses.eliminations = { A: null, B: null }; }
   });
 }
 
@@ -127,7 +141,7 @@ export function beginSwiping(me) {
       const ctx = ctxOf(s);
       const partnerReady = s.session.rounds[other(me)].status === 'ready';
       const partnerMap = partnerReady ? partnerFoods(ctx, other(me), me) : null;
-      const out = buildDeck(ctx, me, { seed: hashSeed(s.session.seed, me), partnerMap });
+      const out = buildDeck(deckCtx(s, me), me, { seed: hashSeed(s.session.seed, me), partnerMap });
       Object.assign(r, out, { adapted: !!partnerMap });
     }
     if (r.status === 'idle') r.status = 'swiping';

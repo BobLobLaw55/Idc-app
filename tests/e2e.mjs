@@ -39,15 +39,19 @@ await check('Up for: pick any mix, even ones that don’t go together', async ()
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 3);
   await A.getByRole('button', { name: /Stay In, Babe/ }).click(); // change of heart
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 2);
+  await A.getByRole('button', { name: /With lube/ }).click();
+  assert.equal(await A.locator('.choice.lube[aria-pressed="true"]').count(), 1);
+  await A.getByRole('button', { name: /With lube/ }).click(); // not tonight
+  assert.equal(await A.locator('.choice.lube[aria-pressed="true"]').count(), 0);
   await shot(A, '02-vibes');
 });
 
 await A.getByRole('button', { name: /Keep going/ }).click();
 
-await check('Setup: no “how are we eating” question; Cocktails too? offered', async () => {
+await check('Setup: no “how are we eating” or drinks question (drinks live on the first screen)', async () => {
   const t = await text(A);
   assert.ok(!/How are we eating/.test(t));
-  assert.match(t, /Cocktails too\?/);
+  assert.ok(!/Cocktails too/.test(t));
 });
 
 await check('Back from setup → vibes preserves my picks', async () => {
@@ -208,8 +212,7 @@ await check('Votes private + Test 9: different vetoes → third wins', async () 
   assert.equal(s.history.decisions.length, 1, 'decision recorded exactly once');
   const rt = await text(A);
   assert.match(rt, /For You/i);
-  assert.match(rt, /Appetizers to split/i);
-  assert.match(rt, /Cocktails, beer & wine/i);
+  assert.ok(!/No starters|No alcohol/i.test(rt), 'missing extras are simply not mentioned');
   await shot(A, '08-result');
 });
 

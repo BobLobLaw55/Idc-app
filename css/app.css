@@ -81,6 +81,7 @@ p { margin: 0 0 10px; }
 .choice span { color: var(--muted); font-size: 13.5px; line-height: 1.35; }
 .choice[aria-pressed='true'], .choice.sel { border: 2px solid var(--accent); padding: 13px; background: #352a2b; }
 .choice[aria-pressed='true']::after { content: '✓'; position: absolute; top: 10px; right: 12px; color: var(--accent); font-weight: 900; }
+.choice.lube { width: 100%; margin-top: 10px; min-height: 0; }
 .choice.blocked { opacity: 0.45; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

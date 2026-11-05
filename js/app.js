@@ -11,7 +11,7 @@ const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
 let state = load();
 let me = getSeat();
-const ui = { vibeDraft: [], veto: null, handoff: false, reqDraft: null, lastRoute: null, reason: 'busy' };
+const ui = { vibeDraft: [], lubeDraft: false, veto: null, handoff: false, reqDraft: null, lastRoute: null, reason: 'busy' };
 
 // ───────────────────────── helpers
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -22,6 +22,7 @@ const chip = (label, act, arg, on) => `<button type="button" class="chip" data-a
 const ses = () => state.session;
 const myRound = () => ses()?.rounds?.[me];
 const myVibes = () => (ses() ? ses().vibes[me] || [] : ui.vibeDraft);
+const myLube = () => (ses() ? !!ses().lube?.[me] : ui.lubeDraft);
 const money = (n) => (n ? `$${n}` : 'No limit');
 const fmtHour = (h) => { const hh = Math.floor(h % 24), mm = Math.round((h % 1) * 60); const ap = hh >= 12 ? 'pm' : 'am'; return `${((hh + 11) % 12) + 1}${mm ? ':' + String(mm).padStart(2, '0') : ''}${ap}`; };
 
@@ -103,7 +104,7 @@ function title(eyebrow, h, sub) {
 
 function settingsSummary(st) {
   const time = st.time.kind === 'asap' ? 'ASAP' : st.time.kind === 'later' ? 'Later tonight' : `At ${esc(st.time.at)}`;
-  return `${st.drinks ? 'Drinks too 🍸 · ' : ''}${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
+  return `${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
 }
 
 // ───────────────────────── screens
@@ -133,6 +134,7 @@ screens.vibes = () => {
   <div class="choices" role="group" aria-label="What you’re up for">
     ${VIBES.map((v) => `<button type="button" class="choice" data-act="vibe" data-arg="${v.id}" aria-pressed="${sel.includes(v.id)}"><strong>${esc(v.name)}</strong><span>${esc(v.line)}</span></button>`).join('')}
   </div>
+  <button type="button" class="choice lube" data-act="lube" aria-pressed="${myLube()}"><strong>With lube 🍸</strong><span>The liquid kind, you animal. If we sit down somewhere, it has to have a bar.</span></button>
   <p class="small muted" style="margin-top:12px">🔒 ${s ? `${nameOf(other(me))} ${partnerPicked ? 'already picked' : 'picks'} their own` : 'Your partner picks their own'} — privately. We only choose places that fit something you <i>both</i> picked.</p>
   <div style="margin-top:12px">${btn(sel.length ? 'Keep going →' : 'Pick at least one', 'vibes-next', { cls: 'wide big', dis: !sel.length })}</div>`;
 };
@@ -143,9 +145,6 @@ function setupControls(st, editable) {
   const custom = st.budget && !budgetPreset.includes(st.budget);
   return `
   ${myVibes().some((v) => ['delivery', 'casual', 'healthy'].includes(v)) ? `<label class="field" for="addr">Delivery address <span class="muted">(if delivery wins)</span></label><input id="addr" type="text" data-change="addr" ${dis} value="${esc(st.deliveryAddress?.name || '')}" placeholder="Home (demo uses the Alachua area)"><p class="hint">Real delivery eligibility depends on the actual address and the provider. Demo restaurants use a pretend delivery radius.</p>` : ''}
-  ${`<label class="field">Cocktails too?</label>
-  <div class="chips" role="group" aria-label="Drinks">${chip('Yes, drinks too 🍸', 'set-drinks', '1', !!st.drinks)}${chip('Just food', 'set-drinks', '0', !st.drinks)}</div>
-  <p class="hint">If we end up sitting down somewhere, it’ll have a bar — matched to the beer, wine or cocktails you each like (set in your profile). Doesn’t apply to pickup or delivery.</p>`}
   <label class="field">Budget per person</label>
   <div class="chips" role="group" aria-label="Budget">${budgetPreset.map((b) => chip(b ? `$${b}` : 'No set limit', 'set-budget', String(b ?? ''), st.budget === b)).join('')}${chip('Custom', 'set-budget', 'custom', custom)}</div>
   ${custom || ui.customBudget ? `<input type="number" min="5" max="300" inputmode="numeric" aria-label="Custom budget per person" data-change="budget" ${dis} value="${st.budget || ''}" style="margin-top:8px">` : ''}
@@ -192,7 +191,6 @@ function requestPanel() {
   if (c.radius !== undefined && c.radius !== cur.radius) diff.push(`Radius → ${c.radius} mi`);
   if (c.time && JSON.stringify(c.time) !== JSON.stringify(cur.time)) diff.push(`Time → ${c.time.kind === 'at' ? c.time.at : c.time.kind === 'asap' ? 'ASAP' : 'Later tonight'}`);
   if (c.location && c.location.name !== cur.location.name) diff.push(`Area → ${esc(c.location.name)}`);
-  if (c.drinks !== undefined && !!c.drinks !== !!cur.drinks) diff.push(c.drinks ? 'Drinks too 🍸' : 'Just food, no bar needed');
   if (rq.from === me) return `<div class="notice">Change request sent. Waiting for ${nameOf(other(me))} to approve.</div>`;
   return `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants to change the plan${rq.note ? ` (${esc(rq.note)})` : ''}:</b><br>${diff.join(' · ') || 'No actual changes. Bold move.'}
     <div class="row" style="margin-top:10px">${btn('Approve', 'req-answer', { arg: 'yes', cls: 'small' })}${btn('Nope', 'req-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
@@ -211,7 +209,7 @@ screens.lobby = () => {
     <div class="skip">${btn('idc. You Know Me.', 'skip', { cls: 'secondary' })}<p>Skip the swipes. We’ve got your cravings covered.</p></div>`;
   }
   return `${title('Two people, one dinner', 'Make your move.', 'Swipe what sounds good, or let your saved profile do the talking. Nobody sees anybody’s picks.')}
-  <div class="panel small muted"><div style="margin-bottom:6px">You’re up for: <b>${esc(vibeNames(myVibes()).join(', '))}</b> ${!s.result ? `<button class="iconbtn" data-act="go" data-arg="vibes" style="margin-left:6px">Change</button>` : ''}</div>${settingsSummary(s.settings)} ${s.startedBy === me && !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Edit</button>` : !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Request change</button>` : ''}</div>
+  <div class="panel small muted"><div style="margin-bottom:6px">You’re up for: <b>${esc(vibeNames(myVibes()).join(', '))}${myLube() ? ' + with lube 🍸' : ''}</b> ${!s.result ? `<button class="iconbtn" data-act="go" data-arg="vibes" style="margin-left:6px">Change</button>` : ''}</div>${settingsSummary(s.settings)} ${s.startedBy === me && !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Edit</button>` : !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Request change</button>` : ''}</div>
   ${requestPanel()}
   <div class="panel" aria-live="polite">
     ${['A', 'B'].map((p) => `<div class="person"><div class="avatar ${p === me ? 'me' : ''}" aria-hidden="true">${nameOf(p)[0] || p}</div><div><b>${nameOf(p)}</b>${p === me ? ' <span class="small muted">(you)</span>' : ''}</div>${statusFor(p)}</div>`).join('')}
@@ -294,21 +292,21 @@ function venueFacts(r, scored) {
 const cap = (w) => w[0].toUpperCase() + w.slice(1);
 const DRINK_FOR_TWO = { beer: 'Beers for two', wine: 'Wine for two', cocktails: 'Cocktails for two' };
 
-/** Final screen: starters to split + what the bar pours for each of you. */
+/** Final screen: appetizers you'll BOTH like (if any) + drinks (if they serve any). Hidden when neither. */
 function extrasHtml(r, sc) {
   const c = { ...ctxOf(state), sessionRejected: [] };
-  const apps = appetizerOptions(r, c);
+  const apps = appetizerOptions(r, c, 3, { onlyBothLike: true });
   const d = drinkMatch(r, c);
   const dineIn = sc?.plan?.method === 'dinein';
   const per = d.per.map((p, i) => (p.likes.length ? `${nameOf(i ? 'B' : 'A')}: ${p.served.length ? p.served.map(cap).join(' or ') : `no ${p.likes.join(' or ')} here`}` : null)).filter(Boolean);
-  return `<div class="panel"><h2>Starters & drinks</h2>
-    <div class="share"><b>Appetizers to split</b>${apps.length
-      ? `<ul class="plain">${apps.map((a) => `<li>${esc(pickLabel({ item: a.item, foodId: a.item.foods[0] }))}${a.item.price ? ` · $${a.item.price}` : ''}${a.bothLove ? ' <span class="both">♥ You both love these</span>' : ''}</li>`).join('')}</ul>`
-      : '<span class="small muted">No starters on this menu that work for both of you.</span>'}</div>
-    <div class="drinks"><b>🍸 Cocktails, beer & wine</b>${d.bar.length
-      ? `${d.bar.map(cap).join(' · ')}${per.length ? `<span class="small muted" style="display:block">${per.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}${dineIn ? '' : '<span class="hint" style="display:block">Alcohol to go depends on local law and the restaurant — check before you count on it.</span>'}`
-      : '<span class="small muted">No alcohol here. Bring your own vibe.</span>'}</div>
-  </div>`;
+  const blocks = [];
+  if (apps.length) {
+    blocks.push(`<div class="share"><b>Appetizers you’ll both like</b><ul class="plain">${apps.map((a) => `<li>${esc(pickLabel({ item: a.item, foodId: a.item.foods[0] }))}${a.item.price ? ` · $${a.item.price}` : ''}</li>`).join('')}</ul></div>`);
+  }
+  if (d.bar.length) {
+    blocks.push(`<div class="drinks"><b>🍸 Drinks here</b>${d.bar.map(cap).join(' · ')}${per.length ? `<span class="small muted" style="display:block">${per.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}${dineIn ? '' : '<span class="hint" style="display:block">Alcohol to go depends on local law and the restaurant — check before you count on it.</span>'}</div>`);
+  }
+  return blocks.length ? `<div class="panel"><h2>While you’re there</h2>${blocks.join('')}</div>` : '';
 }
 
 /** Which of each person's styles this plan satisfies (shown only after both submitted). */
@@ -341,7 +339,7 @@ function mineHtml(rid, scored) {
 
 function drinksPrivate(scored) {
   const d = scored?.drinks;
-  if (!d) return '';
+  if (!d || !myLube()) return '';
   const mine = d.per[me === 'A' ? 0 : 1];
   const line = !mine.likes.length ? '' : mine.served.length ? `${mine.served.map(cap).join(' or ')} for you` : `None of your picks (${mine.likes.join(', ')})`;
   return `<div class="drinks"><b>🍸 At the bar</b>${d.bar.map(cap).join(' · ')}${line ? `<span class="small muted" style="display:block">${esc(line)}</span>` : ''}</div>`;
@@ -472,7 +470,7 @@ screens.profile = () => {
     <div style="flex:1"><label class="field" for="pbud">Default budget</label><select id="pbud" data-change="pbudget">${[15, 25, 40, 0].map((b) => `<option ${(p.budget || 0) === b ? 'selected' : ''} value="${b}">${b ? '$' + b : 'No limit'}</option>`).join('')}</select></div></div>
     <label class="field" for="diet">Dietary requirement</label><select id="diet" data-change="diet"><option value="none" ${p.diet !== 'vegetarian' ? 'selected' : ''}>None</option><option value="vegetarian" ${p.diet === 'vegetarian' ? 'selected' : ''}>Vegetarian</option></select>
   </div>
-  <div class="panel"><h2>Drinks you like</h2><p class="small muted">Used when you say “Cocktails too?”. Leave all unchecked if you’re not drinking.</p>
+  <div class="panel"><h2>Drinks you like</h2><p class="small muted">Used when you pick “With lube 🍸”, and shown on the final screen. Leave all unchecked if you’re not drinking.</p>
     <div class="wrap-row">${DRINKS.map((d) => `<label class="check" style="margin-right:14px"><input type="checkbox" data-change="drink" data-arg="${d}" ${(p.drinks || []).includes(d) ? 'checked' : ''}> ${cap(d)}</label>`).join('')}</div></div>
   <div class="panel"><h2>Allergies</h2><p class="small muted">Stored separately from dislikes. We keep matching dishes away from these categories, but <b>a menu match is never an allergy guarantee</b> — confirm with the restaurant.</p>
     <div class="wrap-row">${ALLERGENS.map((a) => `<label class="check" style="margin-right:12px"><input type="checkbox" data-change="allergy" data-arg="${a}" ${p.allergies.includes(a) ? 'checked' : ''}> ${a}</label>`).join('')}</div></div>
@@ -571,10 +569,12 @@ function act(name, arg) {
       if (ses()) state = S.setVibes(me, sel); else ui.vibeDraft = sel;
       return render();
     }
+    case 'lube':
+      if (ses()) state = S.setLube(me, !myLube()); else ui.lubeDraft = !ui.lubeDraft;
+      return render();
     case 'vibes-next':
-      if (!ses()) { state = S.startSession(me, ui.vibeDraft); ui.vibeDraft = []; return go('setup'); }
+      if (!ses()) { state = S.startSession(me, ui.vibeDraft, ui.lubeDraft); ui.vibeDraft = []; ui.lubeDraft = false; return go('setup'); }
       return go(ses().startedBy === me && !ses().candidates ? 'setup' : ses().candidates ? 'final' : 'lobby');
-    case 'set-drinks': return patchSettings({ drinks: arg === '1' });
     case 'set-budget':
       if (arg === 'custom') { ui.customBudget = true; return render(); }
       ui.customBudget = false;

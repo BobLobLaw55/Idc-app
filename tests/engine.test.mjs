@@ -336,6 +336,21 @@ test('Final screen: appetizer options respect both people’s hard rules', () =>
   assert.equal(apps[0].bothLove, true);
 });
 
+test('No ranking boost for having appetizers or a bar; final list = appetizers you both like', () => {
+  const r = { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } };
+  const base = { steak: 'love', burger: 'love' };
+  const mk = (extra, drinks) => ctx({ rounds: r, profiles: { A: { prefs: { ...base, ...extra }, allergies: [], drinks }, B: { prefs: { ...base, ...extra }, allergies: [], drinks } } });
+  const plain = rankRestaurants(mk({}, []));
+  const fancyExtras = rankRestaurants(mk({ nachos: 'like' }, ['beer', 'wine', 'cocktails']));
+  // liking a starter or drinking doesn't move anyone up: same order, same scores (drinks not requested)
+  assert.deepEqual(fancyExtras.map((x) => [x.id, x.score.toFixed(6)]), plain.map((x) => [x.id, x.score.toFixed(6)]));
+  const r05 = RESTAURANTS.find((x) => x.id === 'r05'); // has nachos + quesadilla
+  const c = mk({ nachos: 'like' }, []);
+  const both = appetizerOptions(r05, c, 3, { onlyBothLike: true });
+  assert.deepEqual(both.map((a) => a.item.foods[0]), ['nachos']);
+  assert.ok(appetizerOptions(r05, c).length > both.length);
+});
+
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {
   for (const r of RESTAURANTS) {
     assert.equal(r.demo, true);

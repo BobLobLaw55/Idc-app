@@ -174,7 +174,6 @@ create table dining_sessions (
   radius_mi int not null,
   search_point geography(point) not null,
   delivery_point geography(point),
-  drinks boolean not null default false,            -- "Cocktails too?" (dine-in only)
   seed bigint not null,
   stage text not null default 'choosing' check (stage in ('choosing', 'final_three', 'decided', 'closed')),
   created_at timestamptz not null default now()
@@ -192,6 +191,7 @@ create table session_participants (
   user_id uuid references users,
   status text not null default 'idle' check (status in ('idle', 'swiping', 'ready')),
   mode text check (mode in ('swipe', 'skip')),
+  with_lube boolean not null default false,       -- private: wants drinks (sit-down places need a bar)
   ready_at timestamptz,
   primary key (session_id, user_id)
 );

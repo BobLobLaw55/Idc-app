@@ -45,6 +45,7 @@ export function load() {
       if (s?.version === 2) {
         if (s.session && !s.session.vibes) s.session = null; // pre-"up for" session format
         if (s.session) for (const p of ['A', 'B']) s.session.vibes[p] = normalizeVibes(s.session.vibes[p]);
+        if (s.session && !s.session.lube) s.session.lube = { A: !!s.session.settings?.drinks, B: false };
         return s;
       }
     }

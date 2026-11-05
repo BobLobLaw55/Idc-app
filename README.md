@@ -19,9 +19,9 @@ A two-person dinner decider. Each person swipes on foods (or taps **idc. You Kno
 | Area | Status |
 |---|---|
 | Each partner privately picks everything they're up for (fancy, casual, quick, healthy, pickup, delivery); the place must fit a style from each person, and the styles decide dine-in / pickup / delivery | ✅ Built |
-| “Cocktails too?”: bar-only places, matched to each person’s beer / wine / cocktails preference | ✅ Built (dine-in) |
+| “With lube 🍸” (drinks wanted): sit-down places need a bar, matched to each person’s beer / wine / cocktails preference | ✅ Built (dine-in) |
 | Different dish for each of you when you want similar things; “You both wanted this” + shared starters | ✅ Built |
-| Session setup: budget presets + custom, time, radius, area, “Cocktails too?” | ✅ Built |
+| Session setup: budget presets + custom, time, radius, area | ✅ Built |
 | Partner requests settings changes instead of silently overriding them | ✅ Built |
 | 72 food categories with photo cards (Unsplash), randomized decks | ✅ Built |
 | Deck mix 50% personal / 30% vibe / 20% discovery, with fewer repeats across sessions | ✅ Built |
