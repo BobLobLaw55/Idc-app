@@ -33,11 +33,11 @@ assert len(FOODS) > 50, f'parsed only {len(FOODS)} foods'
 BY_ID = {f: (n, p) for f, n, p in FOODS}
 
 QUERIES = {  # better search terms than the display name
-    'steak': ['grilled steak', 'steak dinner'], 'lamb': ['lamb chops', 'rack of lamb'],
+    'steak': ['grilled steak', 'steak dinner'], 'lamb': ['lamb chop', 'grilled lamb', 'lamb cutlets', 'roast lamb'],
     'scallops': ['seared scallops', 'scallops dish'], 'philly': ['cheesesteak sandwich', 'philly cheesesteak'],
-    'burrito': ['burrito', 'burrito cut'], 'burritobowl': ['burrito bowl', 'rice bowl beans'],
+    'burrito': ['burrito', 'burrito cut'], 'burritobowl': ['burrito bowl', 'mexican rice bowl', 'taco bowl', 'chipotle bowl'],
     'friedfish': ['fried fish', 'fish and chips'], 'crabcakes': ['crab cakes', 'crab cake'],
-    'oysters': ['oysters', 'raw oysters'], 'hibachi': ['teppanyaki', 'hibachi'],
+    'oysters': ['oysters on ice', 'oyster platter', 'oysters lemon', 'fresh oysters'], 'hibachi': ['hibachi steak', 'teppanyaki steak', 'japanese steakhouse grill', 'hibachi chicken'],
     'pulledpork': ['pulled pork sandwich', 'pulled pork'], 'falafel': ['falafel', 'falafel plate'],
     'fajitas': ['fajitas', 'sizzling fajitas'],
 }
