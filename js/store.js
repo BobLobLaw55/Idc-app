@@ -43,8 +43,8 @@ export function load() {
     if (raw) {
       const s = JSON.parse(raw);
       if (s?.version === 2) {
-        if (s.session?.settings) s.session.settings.vibes = normalizeVibes(s.session.settings.vibes);
-        if (s.session && !s.session.settings.vibes.length) s.session = null;
+        if (s.session && !s.session.vibes) s.session = null; // pre-"up for" session format
+        if (s.session) for (const p of ['A', 'B']) s.session.vibes[p] = normalizeVibes(s.session.vibes[p]);
         return s;
       }
     }

@@ -10,10 +10,10 @@ const PREF_W = { love: 5, like: 3, neutral: 0.6, dislike: 0, never: 0 };
 const PREF_MULT = { love: 1.5, like: 1.2, neutral: 1, dislike: 0.15, never: 0 };
 
 /** Foods that appear on a verified menu at a place passing tonight's non-food constraints. */
-export function localFoods(ctx) {
+export function localFoods(ctx, people) {
   const set = new Set();
   for (const r of ctx.restaurants) {
-    if (placeBlocker(r, ctx)) continue;
+    if (placeBlocker(r, ctx, people)) continue;
     for (const item of r.menu) if (item.verification !== 'unverified') item.foods.forEach((f) => set.add(f));
   }
   return set;
@@ -66,8 +66,8 @@ function vibeAffinity(food, vibes) {
 export function buildDeck(ctx, me, { seed, size = CONFIG.deckSize, partnerMap = null } = {}) {
   const rand = rng(seed);
   const profile = ctx.profiles[me];
-  const vibes = ctx.settings.vibes || [];
-  const local = localFoods(ctx);
+  const vibes = ctx.vibes?.[me] || [];
+  const local = localFoods(ctx, [me]); // my deck reflects MY styles; partner's stay private
   const pool = FOODS.filter((f) => foodAllowed(profile, f.id) && local.has(f.id));
   const rec = (id) => recentCount(ctx.history, me, id);
   const chosen = [];
@@ -127,7 +127,7 @@ export function adaptRemaining(round, ctx, me, partnerMap, seed) {
   const remaining = round.deck.slice(round.pos).filter((id) => !round.answers[id]);
   const answeredLater = round.deck.slice(round.pos).filter((id) => round.answers[id]);
   const profile = ctx.profiles[me];
-  const local = localFoods(ctx);
+  const local = localFoods(ctx, [me]);
   const inDeck = new Set(round.deck);
   const n = Math.min(remaining.length, Math.round(remaining.length * CONFIG.partnerInfluence));
   const items = [...partnerMap.entries()]

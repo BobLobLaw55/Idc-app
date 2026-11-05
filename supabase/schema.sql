@@ -169,7 +169,6 @@ create table dining_sessions (
   id uuid primary key default gen_random_uuid(),
   group_id uuid references partner_groups on delete cascade,
   started_by uuid references users,
-  method text not null check (method in ('dinein', 'pickup', 'delivery', 'either')),
   budget int,
   meal_time timestamptz,
   radius_mi int not null,
@@ -181,10 +180,11 @@ create table dining_sessions (
   created_at timestamptz not null default now()
 );
 
-create table session_vibes (
+create table session_vibes (                    -- PRIVATE per participant: what each person is up for
   session_id uuid references dining_sessions on delete cascade,
-  vibe text not null check (vibe in ('date', 'fancy', 'casual', 'couch', 'grab', 'deliver')),
-  primary key (session_id, vibe)
+  user_id uuid references users,
+  vibe text not null check (vibe in ('fancy', 'casual', 'quick', 'healthy', 'pickup', 'delivery')),
+  primary key (session_id, user_id, vibe)
 );
 
 create table session_participants (
@@ -226,6 +226,7 @@ create table session_eliminations (             -- exactly one vote per particip
 
 create table session_decisions (
   session_id uuid primary key references dining_sessions on delete cascade,
+  method text check (method in ('dinein', 'pickup', 'delivery')),  -- decided by both people's styles
   winner_id uuid references restaurants,
   backup_id uuid references restaurants,
   same_vote boolean not null,
@@ -312,7 +313,7 @@ create policy group_excl_rw on group_restaurant_exclusions for all using (is_mem
 create policy group_excl_approve on group_exclusion_approvals for all using (is_member(group_id)) with check (user_id = auth.uid() and is_member(group_id));
 
 create policy sessions_rw on dining_sessions for all using (is_member(group_id)) with check (is_member(group_id));
-create policy vibes_rw on session_vibes for all using (in_session(session_id)) with check (in_session(session_id));
+create policy vibes_own on session_vibes for all using (user_id = auth.uid()) with check (user_id = auth.uid() and in_session(session_id));
 create policy participants_read on session_participants for select using (in_session(session_id));  -- progress only
 create policy participants_self on session_participants for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 

@@ -32,46 +32,45 @@ await A.reload();
 await shot(A, '01-seat');
 await A.getByRole('button', { name: /I’m You/ }).click();
 
-await check('Vibes: up to 3 compatible, contradictory blocked', async () => {
+await check('Up for: pick any mix, even ones that don’t go together', async () => {
   await A.getByRole('button', { name: /Dress to Impress/ }).click();
   await A.getByRole('button', { name: /Stay In, Babe/ }).click();
-  assert.match(await A.locator('#toast').innerText(), /can’t both happen/);
-  await A.getByRole('button', { name: /Dress to Impress/ }).click(); // deselect
   await A.getByRole('button', { name: /Just Us, No Fuss/ }).click();
-  await A.getByRole('button', { name: /Stay In, Babe/ }).click();
-  await A.getByRole('button', { name: /Hot & Healthy/ }).click();
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 3);
-  await A.getByRole('button', { name: /Hot & Healthy/ }).click();
+  await A.getByRole('button', { name: /Stay In, Babe/ }).click(); // change of heart
+  assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 2);
   await shot(A, '02-vibes');
 });
 
 await A.getByRole('button', { name: /Keep going/ }).click();
 
-await check('Setup: no dine-in option for Stay In + Just Us (delivery only)', async () => {
+await check('Setup: no “how are we eating” question; Cocktails too? offered', async () => {
   const t = await text(A);
-  assert.ok(!/Dine in/.test(t.split('Budget per person')[0]), 'dine-in should not be offered');
-  assert.match(t, /Delivery/);
+  assert.ok(!/How are we eating/.test(t));
+  assert.match(t, /Cocktails too\?/);
 });
 
-await check('Cocktails too? only offered for dine-in', async () => {
-  assert.ok(!/Cocktails too\?/.test(await text(A)), 'not offered for delivery');
-});
-
-await check('Back from setup → vibes preserves selection', async () => {
+await check('Back from setup → vibes preserves my picks', async () => {
   await A.getByRole('button', { name: '← Back', exact: true }).click();
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 2);
-  await A.getByRole('button', { name: /Next: ground rules/ }).click();
+  await A.getByRole('button', { name: /Keep going/ }).click();
 });
 await A.getByRole('button', { name: '$25' }).click();
 await shot(A, '03-setup');
 await A.getByRole('button', { name: /Lock in the plan/ }).click();
 
-// Partner opens a second tab.
+// Partner opens a second tab and privately picks their own styles.
 const B = await open();
 await B.getByRole('button', { name: /I’m Partner/ }).click();
-await check('Partner tab joins the same session', async () => {
+await check('Partner picks their own styles privately, then joins', async () => {
+  assert.match(await text(B), /What are you up for/);
+  assert.equal(await B.locator('.choice[aria-pressed="true"]').count(), 0, 'A’s picks must not be pre-selected or shown');
+  await B.getByRole('button', { name: /Just Us, No Fuss/ }).click();
+  await B.getByRole('button', { name: /A Quickie/ }).click();
+  await B.getByRole('button', { name: /Keep going/ }).click();
   assert.match(await text(B), /Make your move/);
   assert.match(await text(B), /Waiting for partner|Not started/);
+  assert.ok(!/Dress to Impress/.test(await text(B)), 'B must not see A’s styles');
 });
 
 await A.getByRole('button', { name: /Start swiping/ }).click();
@@ -167,6 +166,7 @@ await check('Test 14 (two tabs): both see the same Final Three', async () => {
   assert.equal(nA.length, 3);
   assert.deepEqual(nA, nB);
   names = nA;
+  assert.equal(await A.locator('.venue .fits').count(), 3, 'each place says how it fits both of you');
   await shot(A, '06-final-three');
 });
 

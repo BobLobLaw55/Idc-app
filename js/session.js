@@ -1,7 +1,6 @@
 // Session actions: everything that changes shared state goes through here (UI stays dumb).
 import { update, load } from './store.js';
 import { RESTAURANTS, DEMO_REGION } from './data/restaurants.js';
-import { defaultMethod, allowedMethods } from './data/vibes.js';
 import { buildDeck, partnerFoods, adaptRemaining } from './engine/deck.js';
 import { finalThree, PEOPLE } from './engine/match.js';
 import { resolveEliminations, findReplacement } from './engine/decide.js';
@@ -18,6 +17,7 @@ export function ctxOf(s, extra = {}) {
     profiles: s.profiles,
     rounds: s.session?.rounds || {},
     settings: s.session?.settings,
+    vibes: s.session?.vibes || {},
     group: s.group,
     history: s.history,
     sessionRejected: s.session?.rejected || [],
@@ -34,15 +34,14 @@ export function startSession(me, vibes) {
       seed: Math.floor(Math.random() * 2 ** 31),
       startedBy: me,
       createdAt: new Date().toISOString(),
+      vibes: { A: [], B: [], [me]: [...vibes] }, // private per person: what each of you is up for
       settings: {
-        vibes: [...vibes],
-        method: defaultMethod(vibes),
         budget: prof.budget ?? 25,
         time: { kind: 'asap', at: '19:00' },
         radius: prof.radius ?? DEMO_REGION.radius,
         location: { name: prof.home || DEMO_REGION.name, lat: DEMO_REGION.lat, lng: DEMO_REGION.lng },
         deliveryAddress: null,
-        drinks: false, // "Cocktails too?" (dine-in only)
+        drinks: false, // "Cocktails too?" (only matters if the plan is dine-in)
       },
       settingsRequest: null,
       rounds: { A: emptyRound(), B: emptyRound() },
@@ -57,21 +56,24 @@ export function startSession(me, vibes) {
   });
 }
 
-/** Apply new settings. Unanswered cards are re-dealt so they respect the new rules; answered cards stay. */
-function applySettings(s, patch) {
+/** Re-deal unanswered cards so they respect new rules; answered cards stay. */
+function resettle(s, people = PEOPLE) {
   const st = s.session.settings;
-  Object.assign(st, patch);
-  if (!allowedMethods(st.vibes).includes(st.method) && st.method !== 'either') st.method = defaultMethod(st.vibes);
-  s.session.candidates = null;
-  for (const p of PEOPLE) {
+  for (const p of people) {
     const r = s.session.rounds[p];
     if (!r.deck.length || r.status === 'ready') continue;
     const keep = r.deck.slice(0, r.pos);
-    const { deck, buckets } = buildDeck(ctxOf(s), p, { seed: hashSeed(s.session.seed, p, 'resettle', JSON.stringify(st)) });
+    const { deck, buckets } = buildDeck(ctxOf(s), p, { seed: hashSeed(s.session.seed, p, 'resettle', JSON.stringify(st), String(s.session.vibes[p])) });
     const fresh = deck.filter((id) => !keep.includes(id)).slice(0, r.deck.length - keep.length);
     r.deck = [...keep, ...fresh];
     r.buckets = { ...buckets, ...r.buckets };
   }
+}
+
+function applySettings(s, patch) {
+  Object.assign(s.session.settings, patch);
+  s.session.candidates = null;
+  resettle(s);
 }
 
 export function setSettings(me, patch) {
@@ -81,10 +83,14 @@ export function setSettings(me, patch) {
   });
 }
 
+/** Each person sets their OWN styles. Editable until a decision is made. */
 export function setVibes(me, vibes) {
   return update((s) => {
-    if (!s.session) return;
-    if (s.session.startedBy === me) applySettings(s, { vibes: [...vibes] });
+    const ses = s.session;
+    if (!ses || ses.result || !vibes.length) return;
+    ses.vibes[me] = [...vibes];
+    if (ses.candidates) { ses.candidates = null; ses.eliminations = { A: null, B: null }; }
+    resettle(s, [me]);
   });
 }
 

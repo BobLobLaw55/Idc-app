@@ -77,7 +77,7 @@ p { margin: 0 0 10px; }
   text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
   cursor: pointer; min-height: 96px; display: flex; flex-direction: column; gap: 4px; position: relative;
 }
-.choice strong { font-size: 16px; }
+.choice strong { font-size: 16px; padding-right: 18px; }
 .choice span { color: var(--muted); font-size: 13.5px; line-height: 1.35; }
 .choice[aria-pressed='true'], .choice.sel { border: 2px solid var(--accent); padding: 13px; background: #352a2b; }
 .choice[aria-pressed='true']::after { content: '✓'; position: absolute; top: 10px; right: 12px; color: var(--accent); font-weight: 900; }
@@ -154,6 +154,9 @@ input[type='text'], input[type='number'], input[type='time'], select {
 .pair > div { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; }
 .pair b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .both { display: block; margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--pink); }
+.fits { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.fits b { color: var(--pink); }
+.pill.plan { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .drinks { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }
 .drinks b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .share { background: #2c1f2a; border: 1px dashed #6a3d52; border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }

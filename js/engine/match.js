@@ -1,7 +1,7 @@
 // Restaurant eligibility + ranking. Fully deterministic: no AI, no randomness.
 import { CONFIG } from '../config.js';
 import { UPSCALE, SHAREABLE, FOOD_BY_ID, foodName } from '../data/foods.js';
-import { atmospheres } from '../data/vibes.js';
+import { METHODS, styleFits } from '../data/vibes.js';
 import { valueFn, itemValue, itemAllowed } from './prefs.js';
 
 export const PEOPLE = ['A', 'B'];
@@ -32,18 +32,43 @@ export function openAt(r, hour, method) {
   return h >= open && h <= close - buffer;
 }
 
-function serviceOk(r, s) {
-  const deliveryOk = () =>
-    r.services.delivery && distanceMiles(s.deliveryAddress || s.location, r) <= r.deliveryRadius;
-  switch (s.method) {
-    case 'dinein': return r.services.dinein;
-    case 'pickup': return r.services.pickup;
-    case 'delivery': return deliveryOk();
-    case 'either': return r.services.pickup || deliveryOk();
-    default: return false;
-  }
+/** Can we eat at `r` via `method` tonight (service, delivery range, hours, bar if drinking)? */
+function methodOk(r, method, ctx) {
+  const s = ctx.settings;
+  if (method === 'dinein' && !r.services.dinein) return false;
+  if (method === 'pickup' && !r.services.pickup) return false;
+  if (method === 'delivery' && !(r.services.delivery && distanceMiles(s.deliveryAddress || s.location, r) <= r.deliveryRadius)) return false;
+  if (!openAt(r, mealHour(s.time, ctx.now), method)) return false;
+  if (method === 'dinein' && s.drinks && !r.bar?.length) return false; // "Cocktails too?" → sit-down places need a bar
+  return true;
 }
 
+/**
+ * The plan for restaurant `r`: one method that satisfies at least one style from EACH person in
+ * `people`. A person who hasn't picked styles yet is unconstrained. Prefers plans that hit styles
+ * you share. Returns { method, fits: {A:[...],B:[...]}, shared:[...] } or null.
+ */
+export function planFor(r, ctx, people = PEOPLE) {
+  let best = null;
+  for (const method of METHODS) {
+    if (!methodOk(r, method, ctx)) continue;
+    const fits = {};
+    let ok = true;
+    let score = 0;
+    for (const p of people) {
+      const picks = ctx.vibes?.[p] || [];
+      if (!picks.length) { fits[p] = []; continue; }
+      fits[p] = picks.filter((id) => styleFits(r, id, method, FOOD_BY_ID));
+      if (!fits[p].length) { ok = false; break; }
+      score += fits[p].length;
+    }
+    if (!ok) continue;
+    const shared = people.length === 2 ? (fits.A || []).filter((id) => (fits.B || []).includes(id)) : [];
+    score += shared.length * 3 + (method === 'dinein' && ctx.settings.drinks ? 2 : 0);
+    if (!best || score > best.score) best = { method, fits, shared, score };
+  }
+  return best;
+}
 export function excludedFor(ctx, rid) {
   const { profiles, group } = ctx;
   return (
@@ -53,8 +78,8 @@ export function excludedFor(ctx, rid) {
 }
 
 export const DRINKS = ['beer', 'wine', 'cocktails'];
-/** "Cocktails too?" only applies to dine-in nights. */
-export const drinksOn = (s) => !!s?.drinks && s.method === 'dinein';
+/** "Cocktails too?" only matters when the plan is to sit down somewhere. */
+export const drinksOn = (s, plan) => !!s?.drinks && plan?.method === 'dinein';
 
 /** What each person would drink here, and what you both like that they pour. */
 export function drinkMatch(r, ctx) {
@@ -66,27 +91,28 @@ export function drinkMatch(r, ctx) {
   return { bar: r.bar || [], per, together };
 }
 
-function drinkBonus(ctx, r) {
-  if (!drinksOn(ctx.settings)) return 0;
+function drinkBonus(ctx, r, plan) {
+  if (!drinksOn(ctx.settings, plan)) return 0;
   const m = drinkMatch(r, ctx);
-  let b = 0;
+  let b = 0.02; // you asked for drinks and you're getting them
   for (const p of m.per) if (p.likes.length) b += p.served.length ? 0.04 : -0.04;
   if (m.together.length) b += 0.02;
   return b;
 }
 
-/** Non-food hard constraints. Returns null if OK, or a reason string. */
-export function placeBlocker(r, ctx) {
+/** Non-food hard constraints. Returns { blocked: reason } or { plan }. */
+export function placeCheck(r, ctx, people = PEOPLE) {
   const s = ctx.settings;
-  if (excludedFor(ctx, r.id)) return 'permanently excluded';
-  if ((ctx.sessionRejected || []).includes(r.id)) return 'already rejected tonight';
-  if (!serviceOk(r, s)) return `no ${s.method}`;
-  if (distanceMiles(s.location, r) > s.radius) return 'outside search radius';
-  if (!openAt(r, mealHour(s.time, ctx.now), s.method)) return 'closed at meal time';
-  if (s.budget && r.price > s.budget * CONFIG.budgetSlack) return 'over budget';
-  if (drinksOn(s) && !r.bar?.length) return 'no bar';
-  return null;
+  if (excludedFor(ctx, r.id)) return { blocked: 'permanently excluded' };
+  if ((ctx.sessionRejected || []).includes(r.id)) return { blocked: 'already rejected tonight' };
+  if (distanceMiles(s.location, r) > s.radius) return { blocked: 'outside search radius' };
+  if (s.budget && r.price > s.budget * CONFIG.budgetSlack) return { blocked: 'over budget' };
+  const plan = planFor(r, ctx, people);
+  if (!plan) return { blocked: 'no plan fits both of your styles (or it’s closed)' };
+  return { plan };
 }
+
+export const placeBlocker = (r, ctx, people) => placeCheck(r, ctx, people).blocked || null;
 
 /** Best menu item at restaurant `r` for one person. */
 export function bestFor(profile, value, r) {
@@ -113,17 +139,13 @@ function historyBonus(ctx, rid) {
   return bonus;
 }
 
-function vibeBonus(ctx, r, picks) {
-  const atm = atmospheres(ctx.settings.vibes || []);
+function vibeBonus(ctx, r, picks, plan) {
+  const all = [...(plan.fits.A || []), ...(plan.fits.B || [])];
   let b = 0;
-  if (atm.includes('upscale')) {
-    b += r.atmosphere.includes('upscale') ? 0.08 : -0.08;
-    b += (picks.filter((p) => UPSCALE.has(p.foodId)).length / 2) * 0.05;
-  }
-  if (atm.includes('romantic')) b += r.atmosphere.includes('romantic') ? 0.05 : -0.03;
-  if (atm.includes('casual')) b += r.atmosphere.includes('casual') ? 0.03 : -0.02;
-  if (atm.includes('quick')) b += r.atmosphere.includes('quick') ? 0.06 : -0.04;
-  if ((ctx.settings.vibes || []).includes('healthy')) b += (picks.filter((p) => FOOD_BY_ID[p.foodId]?.vibes.includes('healthy')).length / 2) * 0.08;
+  if (plan.shared.length) b += 0.05; // a style you're BOTH up for beats a compromise
+  if (all.includes('fancy')) b += (picks.filter((p) => UPSCALE.has(p.foodId)).length / 2) * 0.05;
+  if (all.includes('healthy')) b += (picks.filter((p) => FOOD_BY_ID[p.foodId]?.vibes.includes('healthy')).length / 2) * 0.08;
+  if (all.includes('quick') && r.atmosphere.includes('quick')) b += 0.02;
   return b;
 }
 
@@ -175,7 +197,8 @@ export function pairDishes(r, ctx, values) {
 
 /** Score one restaurant. Returns null if it fails a hard constraint. */
 export function scoreRestaurant(r, ctx, opts = {}) {
-  if (placeBlocker(r, ctx)) return null;
+  const { plan } = placeCheck(r, ctx);
+  if (!plan) return null;
   const s = ctx.settings;
   const values = Object.fromEntries(PEOPLE.map((p) => [p, opts.values?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p])]));
   const bests = PEOPLE.map((p) => bestFor(ctx.profiles[p], values[p], r));
@@ -198,8 +221,8 @@ export function scoreRestaurant(r, ctx, opts = {}) {
     verification: picks.reduce((t, p) => t + (p.item.verification === 'dish' ? 1 : 0.6), 0) / 2,
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
-  const score = base + vibeBonus(ctx, r, picks) + historyBonus(ctx, r.id) + drinkBonus(ctx, r);
-  return { r, id: r.id, score, parts, picks, share, miles, drinks: drinksOn(s) ? drinkMatch(r, ctx) : null };
+  const score = base + vibeBonus(ctx, r, picks, plan) + historyBonus(ctx, r.id) + drinkBonus(ctx, r, plan);
+  return { r, id: r.id, score, parts, picks, share, miles, plan, drinks: drinksOn(s, plan) ? drinkMatch(r, ctx) : null };
 }
 
 export function rankRestaurants(ctx, opts) {

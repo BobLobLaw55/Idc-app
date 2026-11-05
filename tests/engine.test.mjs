@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RESTAURANTS, DEMO_REGION } from '../js/data/restaurants.js';
 import { FOODS, FOOD_BY_ID, UPSCALE } from '../js/data/foods.js';
-import { canAddVibe, allowedMethods, methodChoices } from '../js/data/vibes.js';
+
 import { buildDeck, partnerFoods, adaptRemaining } from '../js/engine/deck.js';
 import { rankRestaurants, finalThree, scoreRestaurant } from '../js/engine/match.js';
 import { resolveEliminations, findReplacement } from '../js/engine/decide.js';
@@ -12,7 +12,10 @@ const SEAFOOD = new Set(FOODS.filter((f) => f.group === 'Seafood').map((f) => f.
 const at7pm = new Date('2026-11-04T19:00:00');
 
 function ctx(over = {}) {
+  const sv = over.settings?.vibes;
+  const vibes = over.vibes || (Array.isArray(sv) ? { A: sv, B: sv } : sv || { A: ['casual'], B: ['casual'] });
   return {
+    vibes,
     restaurants: RESTAURANTS,
     profiles: {
       A: { name: 'A', prefs: {}, allergies: [], excludedRestaurants: [], favoriteRestaurants: [] },
@@ -20,7 +23,7 @@ function ctx(over = {}) {
       ...over.profiles,
     },
     rounds: over.rounds || {},
-    settings: { vibes: ['casual'], method: 'dinein', budget: null, time: { kind: 'asap' }, radius: 25, location: DEMO_REGION, ...over.settings },
+    settings: { budget: null, time: { kind: 'asap' }, radius: 25, location: DEMO_REGION, ...over.settings },
     group: { sharedExclusions: [], ...over.group },
     history: over.history || {},
     sessionRejected: over.sessionRejected || [],
@@ -35,7 +38,7 @@ test('Test 1: Never sushi is never dealt to A; sushi restaurants can still quali
     const { deck } = buildDeck(c, 'A', { seed });
     assert.ok(!deck.includes('sushi'), `seed ${seed} dealt sushi`);
   }
-  const ranked = rankRestaurants({ ...c, rounds: { A: swipe({ steak: 'yes' }), B: swipe({ sushi: 'yes' }) } });
+  const ranked = rankRestaurants({ ...c, vibes: { A: ['casual'], B: ['casual'] }, rounds: { A: swipe({ steak: 'yes' }), B: swipe({ sushi: 'yes' }) } });
   const koi = ranked.find((x) => x.id === 'r13');
   assert.ok(koi, 'Koi & Ember (sushi + hibachi steak) should still qualify');
   assert.ok(!koi.picks[0].item.foods.includes('sushi'), 'A’s dish must not be sushi');
@@ -115,7 +118,7 @@ test('Allergies: a shellfish allergy keeps shellfish dishes from being that pers
 });
 
 test('Test 8: Dress to Impress favors upscale dishes and places; Stay In only delivery-capable places', () => {
-  const fancy = ctx({ settings: { vibes: ['fancy'], method: 'dinein' } });
+  const fancy = ctx({ settings: { vibes: ['fancy'] } });
   const couch = ctx({ settings: { vibes: ['delivery'], method: 'delivery' } });
   let up = 0, upC = 0;
   for (let s = 1; s <= 30; s++) {
@@ -183,7 +186,7 @@ test('Test 11: shared and individual exclusions never appear', () => {
 });
 
 test('Test 12: replacement never repeats rejected options; backup first', () => {
-  const c = ctx({ rounds: { A: swipe({ steak: 'yes' }), B: swipe({ burger: 'yes' }) } });
+  const c = ctx({ vibes: { A: ['casual', 'fancy'], B: ['casual', 'fancy'] }, rounds: { A: swipe({ steak: 'yes' }), B: swipe({ burger: 'yes' }) } });
   const f = finalThree(c);
   const res = resolveEliminations({ ...f, eliminations: { A: f.candidates[0], B: f.candidates[1] } }, c);
   const rejected = [...res.eliminated];
@@ -207,17 +210,6 @@ test('Unverified menu items never qualify', () => {
   // r06 lists "Steak" as unverified only
   const c = ctx({ profiles: { A: { prefs: Object.fromEntries(FOODS.map((x) => [x.id, x.id === 'steak' ? 'love' : 'never'])), allergies: [] } }, rounds: { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } } });
   assert.equal(scoreRestaurant(RESTAURANTS.find((r) => r.id === 'r06'), c), null);
-});
-
-test('Vibes: contradictory combos blocked, compatible ones allowed', () => {
-  assert.equal(canAddVibe(['fancy'], 'healthy').ok, true);
-  assert.equal(canAddVibe(['fancy'], 'delivery').ok, false);
-  assert.equal(canAddVibe(['fancy'], 'quick').ok, false);
-  assert.equal(canAddVibe(['pickup'], 'delivery').ok, false);
-  assert.deepEqual(allowedMethods(['delivery']), ['delivery']);
-  assert.ok(!methodChoices(['casual', 'delivery']).includes('dinein'));
-  assert.deepEqual(methodChoices(['fancy', 'casual']), ['dinein']);
-  assert.equal(canAddVibe(['casual', 'healthy', 'quick'], 'fancy').ok, false);
 });
 
 test('Pairing: similar cravings → different dishes, flagged as both wanted', () => {
@@ -278,23 +270,50 @@ test('Quick and Healthy vibes steer cards and places', () => {
   assert.ok(h > base * 1.3, `healthy ${h} vs casual ${base}`);
 });
 
-test('Cocktails too: only bars qualify, matched to each person’s drinks', () => {
+test('Cocktails too: sit-down plans need a bar; pickup/delivery plans unaffected', () => {
   const r = { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } };
   const prefs = { steak: 'love', burger: 'love', wings: 'like', pizza: 'like' };
-  const mk = (drinks, da, db) => ctx({ rounds: r, settings: { vibes: ['casual'], method: 'dinein', drinks },
-    profiles: { A: { prefs, allergies: [], drinks: da }, B: { prefs, allergies: [], drinks: db } } });
-  const on = rankRestaurants(mk(true, ['cocktails'], ['cocktails']));
+  const mk = (drinks, vibes) => ctx({ rounds: r, vibes, settings: { drinks },
+    profiles: { A: { prefs, allergies: [], drinks: ['cocktails'] }, B: { prefs, allergies: [], drinks: ['cocktails'] } } });
+  const fancy = { A: ['fancy'], B: ['fancy'] };
+  const on = rankRestaurants(mk(true, fancy));
   assert.ok(on.length >= 3);
-  for (const x of on) assert.ok(x.r.bar.length, `${x.r.name} has no bar`);
-  assert.ok(on.slice(0, 3).every((x) => x.r.bar.includes('cocktails')), on.slice(0, 3).map((x) => x.r.name).join());
+  for (const x of on) { assert.equal(x.plan.method, 'dinein'); assert.ok(x.r.bar.length, x.r.name); }
   assert.deepEqual(on[0].drinks.together, ['cocktails']);
-  // off → places without a bar are back in play, and no drinks info is attached
-  const off = rankRestaurants(mk(false, ['cocktails'], ['cocktails']));
-  assert.ok(off.length > on.length);
+  const off = rankRestaurants(mk(false, { A: ['casual'], B: ['casual'] }));
   assert.equal(off[0].drinks, null);
-  // drinks toggle is ignored for delivery nights
-  const del = ctx({ rounds: r, settings: { vibes: ['delivery'], method: 'delivery', drinks: true }, profiles: { A: { prefs, allergies: [] }, B: { prefs, allergies: [] } } });
-  assert.ok(rankRestaurants(del).some((x) => !x.r.bar.length));
+  // drinks on, but you're both only up for delivery → bars don't matter
+  const del = rankRestaurants(mk(true, { A: ['delivery'], B: ['delivery'] }));
+  assert.ok(del.length && del.every((x) => x.plan.method === 'delivery' && x.drinks === null));
+  assert.ok(del.some((x) => !x.r.bar.length));
+});
+
+test('Up for: picks don’t have to agree, but every place fits a style from EACH of you', () => {
+  const r = { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } };
+  const prefs = { steak: 'love', burger: 'love', wings: 'like', pizza: 'like', tacos: 'like', salad: 'like' };
+  const mk = (vibes) => ctx({ rounds: r, vibes, profiles: { A: { prefs, allergies: [] }, B: { prefs, allergies: [] } } });
+  // fancy vs sweatpants-only → impossible together: nothing qualifies
+  assert.equal(rankRestaurants(mk({ A: ['fancy'], B: ['delivery'] })).length, 0);
+  // overlapping on casual → casual plans, and the shared style is called out
+  const mid = rankRestaurants(mk({ A: ['fancy', 'casual'], B: ['casual', 'delivery'] }));
+  assert.ok(mid.length >= 3);
+  for (const x of mid) {
+    assert.ok(x.plan.fits.A.length && x.plan.fits.B.length, x.r.name);
+    assert.ok(x.plan.fits.A.every((v) => ['fancy', 'casual'].includes(v)));
+  }
+  assert.ok(mid.slice(0, 3).every((x) => x.plan.shared.includes('casual')));
+  // no shared style but a bridge exists: you want fancy or delivery, she wants casual or delivery → delivery
+  const bridge = rankRestaurants(mk({ A: ['fancy', 'delivery'], B: ['casual', 'delivery'] }));
+  assert.ok(bridge.length && bridge.every((x) => x.plan.method === 'delivery' || x.r.atmosphere.includes('upscale')));
+  // A Quickie for both → only quick-service places
+  for (const x of rankRestaurants(mk({ A: ['quick'], B: ['quick', 'fancy'] }))) assert.ok(x.r.atmosphere.includes('quick'));
+});
+
+test('Up for: my card deck follows MY styles only (partner’s stay private)', () => {
+  const c = ctx({ vibes: { A: ['fancy'], B: ['delivery'] } });
+  let up = 0;
+  for (let s = 1; s <= 20; s++) up += buildDeck(c, 'A', { seed: s }).deck.filter((f) => UPSCALE.has(f)).length;
+  assert.ok(up > 40, `fancy deck upscale cards ${up}`);
 });
 
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {

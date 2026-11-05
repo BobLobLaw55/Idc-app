@@ -1,10 +1,10 @@
 import { load, subscribe, getSeat, setSeat, reset } from './store.js';
 import * as S from './session.js';
 import { other, ctxOf } from './session.js';
-import { VIBES, VIBE_BY_ID, canAddVibe, methodChoices, METHOD_LABEL } from './data/vibes.js';
+import { VIBES, METHOD_LABEL, vibeNames } from './data/vibes.js';
 import { FOODS, FOOD_BY_ID, GROUPS, ALLERGENS, photoUrl, foodName } from './data/foods.js';
 import { RESTAURANTS, RESTAURANT_BY_ID } from './data/restaurants.js';
-import { scoreRestaurant, pickLabel, distanceMiles, DRINKS, drinksOn } from './engine/match.js';
+import { scoreRestaurant, pickLabel, distanceMiles, DRINKS } from './engine/match.js';
 import { LEVELS, prefOf } from './engine/prefs.js';
 
 const app = document.getElementById('app');
@@ -21,6 +21,7 @@ const btn = (label, act, { cls = '', arg = '', dis = false, aria = '' } = {}) =>
 const chip = (label, act, arg, on) => `<button type="button" class="chip" data-act="${act}" data-arg="${esc(arg)}" aria-pressed="${!!on}">${label}</button>`;
 const ses = () => state.session;
 const myRound = () => ses()?.rounds?.[me];
+const myVibes = () => (ses() ? ses().vibes[me] || [] : ui.vibeDraft);
 const money = (n) => (n ? `$${n}` : 'No limit');
 const fmtHour = (h) => { const hh = Math.floor(h % 24), mm = Math.round((h % 1) * 60); const ap = hh >= 12 ? 'pm' : 'am'; return `${((hh + 11) % 12) + 1}${mm ? ':' + String(mm).padStart(2, '0') : ''}${ap}`; };
 
@@ -39,6 +40,7 @@ function defaultRoute() {
   const s = ses();
   if (!s) return 'vibes';
   if (s.result) return 'result';
+  if (!myVibes().length) return 'vibes';
   if (s.candidates) return 'final';
   if (myRound()?.status === 'swiping') return 'swipe';
   return 'lobby';
@@ -100,9 +102,8 @@ function title(eyebrow, h, sub) {
 }
 
 function settingsSummary(st) {
-  const vibes = st.vibes.map((v) => esc(VIBE_BY_ID[v].name)).join(' + ');
   const time = st.time.kind === 'asap' ? 'ASAP' : st.time.kind === 'later' ? 'Later tonight' : `At ${esc(st.time.at)}`;
-  return `${vibes} · ${METHOD_LABEL[st.method]}${drinksOn(st) ? ' + drinks' : ''} · ${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
+  return `${st.drinks ? 'Drinks too 🍸 · ' : ''}${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
 }
 
 // ───────────────────────── screens
@@ -125,35 +126,26 @@ screens.seat = () => {
 
 screens.vibes = () => {
   const s = ses();
-  const mine = !s || s.startedBy === me;
-  const sel = s ? s.settings.vibes : ui.vibeDraft;
+  const sel = myVibes();
+  const partnerPicked = s && (s.vibes[other(me)] || []).length;
   return `<div class="hero-logo">idc<span>.</span></div><p class="tagline">You pick the food. We pick the place.</p>
-  ${title('Tonight', 'So… what’s the vibe?', 'Because ‘I don’t care’ is never the whole story. Pick 1–3.')}
-  ${!mine ? `<div class="notice">${nameOf(s.startedBy)} set tonight’s vibe. Want something different? Request a change from the lobby.</div>` : ''}
-  <div class="choices" role="group" aria-label="Vibes">
-    ${VIBES.map((v) => {
-      const on = sel.includes(v.id);
-      const ok = on || canAddVibe(sel, v.id).ok;
-      return `<button type="button" class="choice ${ok ? '' : 'blocked'}" data-act="vibe" data-arg="${v.id}" aria-pressed="${on}" ${mine ? '' : 'disabled'}><strong>${esc(v.name)}</strong><span>${esc(v.line)}</span></button>`;
-    }).join('')}
+  ${title('Tonight', 'What are you up for?', 'Pick everything you’d be happy with — dressed up, sweatpants, in-and-out. They don’t have to make sense together.')}
+  <div class="choices" role="group" aria-label="What you’re up for">
+    ${VIBES.map((v) => `<button type="button" class="choice" data-act="vibe" data-arg="${v.id}" aria-pressed="${sel.includes(v.id)}"><strong>${esc(v.name)}</strong><span>${esc(v.line)}</span></button>`).join('')}
   </div>
-  <div style="margin-top:16px">${btn(s ? 'Next: ground rules →' : 'Keep going →', 'vibes-next', { cls: 'wide big', dis: !sel.length })}</div>`;
+  <p class="small muted" style="margin-top:12px">🔒 ${s ? `${nameOf(other(me))} ${partnerPicked ? 'already picked' : 'picks'} their own` : 'Your partner picks their own'} — privately. We only choose places that fit something you <i>both</i> picked.</p>
+  <div style="margin-top:12px">${btn(sel.length ? 'Keep going →' : 'Pick at least one', 'vibes-next', { cls: 'wide big', dis: !sel.length })}</div>`;
 };
 
 function setupControls(st, editable) {
-  const methods = methodChoices(st.vibes);
   const dis = editable ? '' : 'disabled';
   const budgetPreset = [15, 25, 40, null];
   const custom = st.budget && !budgetPreset.includes(st.budget);
   return `
-  <label class="field">How are we eating?</label>
-  ${methods.length === 1
-    ? `<p class="muted">${METHOD_LABEL[methods[0]]} — that’s what ${st.vibes.map((v) => esc(VIBE_BY_ID[v].name)).join(' + ')} means.</p>`
-    : `<div class="chips" role="group" aria-label="Dining method">${methods.map((m) => chip(METHOD_LABEL[m], 'set-method', m, st.method === m)).join('')}</div>`}
-  ${['delivery', 'either'].includes(st.method) ? `<label class="field" for="addr">Delivery address</label><input id="addr" type="text" data-change="addr" ${dis} value="${esc(st.deliveryAddress?.name || '')}" placeholder="Home (demo uses the Alachua area)"><p class="hint">Real delivery eligibility depends on the actual address and the provider. Demo restaurants use a pretend delivery radius.</p>` : ''}
-  ${st.method === 'dinein' ? `<label class="field">Cocktails too?</label>
+  ${myVibes().some((v) => ['delivery', 'casual', 'healthy'].includes(v)) ? `<label class="field" for="addr">Delivery address <span class="muted">(if delivery wins)</span></label><input id="addr" type="text" data-change="addr" ${dis} value="${esc(st.deliveryAddress?.name || '')}" placeholder="Home (demo uses the Alachua area)"><p class="hint">Real delivery eligibility depends on the actual address and the provider. Demo restaurants use a pretend delivery radius.</p>` : ''}
+  ${`<label class="field">Cocktails too?</label>
   <div class="chips" role="group" aria-label="Drinks">${chip('Yes, drinks too 🍸', 'set-drinks', '1', !!st.drinks)}${chip('Just food', 'set-drinks', '0', !st.drinks)}</div>
-  <p class="hint">We’ll only pick places with a bar, then match beer, wine or cocktails to what you each like (set in your profile).</p>` : ''}
+  <p class="hint">If we end up sitting down somewhere, it’ll have a bar — matched to the beer, wine or cocktails you each like (set in your profile). Doesn’t apply to pickup or delivery.</p>`}
   <label class="field">Budget per person</label>
   <div class="chips" role="group" aria-label="Budget">${budgetPreset.map((b) => chip(b ? `$${b}` : 'No set limit', 'set-budget', String(b ?? ''), st.budget === b)).join('')}${chip('Custom', 'set-budget', 'custom', custom)}</div>
   ${custom || ui.customBudget ? `<input type="number" min="5" max="300" inputmode="numeric" aria-label="Custom budget per person" data-change="budget" ${dis} value="${st.budget || ''}" style="margin-top:8px">` : ''}
@@ -196,7 +188,6 @@ function requestPanel() {
   const c = rq.changes;
   const diff = [];
   const cur = ses().settings;
-  if (c.method !== undefined && c.method !== cur.method) diff.push(`Method → ${METHOD_LABEL[c.method]}`);
   if (c.budget !== undefined && c.budget !== cur.budget) diff.push(`Budget → ${money(c.budget)}`);
   if (c.radius !== undefined && c.radius !== cur.radius) diff.push(`Radius → ${c.radius} mi`);
   if (c.time && JSON.stringify(c.time) !== JSON.stringify(cur.time)) diff.push(`Time → ${c.time.kind === 'at' ? c.time.at : c.time.kind === 'asap' ? 'ASAP' : 'Later tonight'}`);
@@ -220,7 +211,7 @@ screens.lobby = () => {
     <div class="skip">${btn('idc. You Know Me.', 'skip', { cls: 'secondary' })}<p>Skip the swipes. We’ve got your cravings covered.</p></div>`;
   }
   return `${title('Two people, one dinner', 'Make your move.', 'Swipe what sounds good, or let your saved profile do the talking. Nobody sees anybody’s picks.')}
-  <div class="panel small muted">${settingsSummary(s.settings)} ${s.startedBy === me && !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Edit</button>` : !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Request change</button>` : ''}</div>
+  <div class="panel small muted"><div style="margin-bottom:6px">You’re up for: <b>${esc(vibeNames(myVibes()).join(', '))}</b> ${!s.result ? `<button class="iconbtn" data-act="go" data-arg="vibes" style="margin-left:6px">Change</button>` : ''}</div>${settingsSummary(s.settings)} ${s.startedBy === me && !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Edit</button>` : !s.candidates ? `<button class="iconbtn" data-act="go" data-arg="setup" style="margin-left:6px">Request change</button>` : ''}</div>
   ${requestPanel()}
   <div class="panel" aria-live="polite">
     ${['A', 'B'].map((p) => `<div class="person"><div class="avatar ${p === me ? 'me' : ''}" aria-hidden="true">${nameOf(p)[0] || p}</div><div><b>${nameOf(p)}</b>${p === me ? ' <span class="small muted">(you)</span>' : ''}</div>${statusFor(p)}</div>`).join('')}
@@ -296,7 +287,8 @@ screens.review = () => {
 function venueFacts(r, scored) {
   const st = ses().settings;
   const miles = scored ? scored.miles : distanceMiles(st.location, r);
-  return `<div class="facts"><span class="pill">${esc(r.cuisine)}</span><span class="pill">${miles.toFixed(1)} mi</span><span class="pill">~$${r.price}/person</span><span class="pill">${fmtHour(r.hours[0])}–${fmtHour(r.hours[1])}</span><span class="pill">${['dinein', 'pickup', 'delivery'].filter((k) => r.services[k]).map((k) => METHOD_LABEL[k]).join(' · ')}</span></div>`;
+  const plan = scored?.plan ? `<span class="pill plan">Plan: ${METHOD_LABEL[scored.plan.method]}</span>` : '';
+  return `<div class="facts">${plan}<span class="pill">${esc(r.cuisine)}</span><span class="pill">${miles.toFixed(1)} mi</span><span class="pill">~$${r.price}/person</span><span class="pill">${fmtHour(r.hours[0])}–${fmtHour(r.hours[1])}</span><span class="pill">${['dinein', 'pickup', 'delivery'].filter((k) => r.services[k]).map((k) => METHOD_LABEL[k]).join(' · ')}</span></div>`;
 }
 
 const cap = (w) => w[0].toUpperCase() + w.slice(1);
@@ -311,6 +303,16 @@ function drinksHtml(scored) {
     return `${nameOf(i ? 'B' : 'A')}: ${p.served.length ? p.served.map(cap).join(' or ') : `no ${p.likes.join(' or ')} here`}`;
   }).filter(Boolean);
   return `<div class="drinks"><b>🍸 At the bar</b>${d.bar.map(cap).join(' · ')}${lines.length ? `<span class="small muted" style="display:block">${lines.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}</div>`;
+}
+
+/** Which of each person's styles this plan satisfies (shown only after both submitted). */
+function fitsHtml(scored) {
+  const pl = scored?.plan;
+  if (!pl) return '';
+  if (pl.shared.length) return `<p class="fits">♥ You’re both up for <b>${esc(vibeNames(pl.shared).join(' & '))}</b></p>`;
+  const part = (p) => (pl.fits[p] || []).length ? `${nameOf(p)}: ${esc(vibeNames(pl.fits[p]).join(' / '))}` : null;
+  const parts = ['A', 'B'].map(part).filter(Boolean);
+  return parts.length ? `<p class="fits">Meets you in the middle — ${parts.join(' · ')}</p>` : '';
 }
 
 function pairHtml(scored) {
@@ -333,10 +335,10 @@ function broadenPanel() {
   if (st.budget) opts.push([`Budget → ${money(st.budget + 15)}`, JSON.stringify({ budget: st.budget + 15 })], ['No budget limit', JSON.stringify({ budget: null })]);
   if (st.radius < 40) opts.push([`Radius → ${Math.min(40, st.radius + 10)} mi`, JSON.stringify({ radius: Math.min(40, st.radius + 10) })]);
   if (st.time.kind !== 'later') opts.push(['Eat later tonight', JSON.stringify({ time: { kind: 'later', at: st.time.at } })]);
-  methodChoices(st.vibes).filter((m) => m !== st.method).forEach((m) => opts.push([`Try ${METHOD_LABEL[m]}`, JSON.stringify({ method: m })]));
   const mine = ses().startedBy === me;
   return `<div class="panel"><h2>Broaden the search</h2><p class="small muted">${mine ? 'Pick one and we’ll rerun the match.' : `${nameOf(ses().startedBy)} has to approve changes.`}</p>
-    <div class="wrap-row">${opts.map(([l, v]) => btn(l, 'broaden', { arg: v, cls: 'small secondary' })).join('')}</div></div>`;
+    <div class="wrap-row">${opts.map(([l, v]) => btn(l, 'broaden', { arg: v, cls: 'small secondary' })).join('')}</div>
+    <p class="small muted" style="margin-top:12px">Or open yourself up a little:</p>${btn('Change what I’m up for', 'go', { arg: 'vibes', cls: 'small ghost' })}</div>`;
 }
 
 screens.final = () => {
@@ -367,7 +369,7 @@ function venueCard(id, canVeto) {
   const sc = scoreOf(id);
   const mineVetoed = ses().eliminations?.[me] === id || ui.veto === id;
   return `<article class="venue ${mineVetoed ? 'vetoed' : ''}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">Demo</span></div>
-    ${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}
+    ${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}
     <div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}${canVeto ? btn('Eliminate', 'veto', { arg: id, cls: 'small danger', aria: `Eliminate ${r.name}` }) : ''}</div></article>`;
 }
 
@@ -378,7 +380,7 @@ screens.details = (rid) => {
   const pend = state.group.pendingExclusions[rid];
   const vb = { dish: 'Verified dish', category: 'Category only', unverified: 'Unverified — not used' };
   return `${title(esc(r.cuisine), esc(r.name), `${r.atmosphere.join(' · ')} · fictional demo restaurant`)}
-  ${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}
+  ${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}
   <div class="panel"><h2>Menu (demo)</h2>${r.menu.map((m) => `<div class="pref-row"><span>${esc(m.name || foodName(m.foods[0]))}${m.price ? ` · $${m.price}` : ''}</span><span class="pill">${vb[m.verification]}</span></div>`).join('')}
     <p class="hint">Source: ${esc(r.source)} · verified ${esc(r.verifiedOn)} · Menu link: none (not a real restaurant).</p></div>
   <div class="panel small"><b>Drinks (demo):</b> ${r.bar.length ? r.bar.map(cap).join(' · ') : 'No alcohol served'}</div>
@@ -400,7 +402,8 @@ screens.result = () => {
   const r = RESTAURANT_BY_ID[res.winner];
   const sc = scoreOf(res.winner);
   const b = res.backup && RESTAURANT_BY_ID[res.backup];
-  const verb = s.settings.method === 'dinein' ? 'Tonight you’re going to' : s.settings.method === 'delivery' ? 'Tonight’s delivery is from' : 'Tonight’s order is from';
+  const m = sc?.plan?.method;
+  const verb = m === 'dinein' ? 'Tonight you’re going to' : m === 'delivery' ? 'Tonight’s delivery is from' : m === 'pickup' ? 'Tonight’s pickup is from' : 'Tonight’s pick';
   const votes = res.eliminated.length ? `<p class="small muted">Vetoes: ${['A', 'B'].map((p) => `${nameOf(p)} cut ${esc(RESTAURANT_BY_ID[s.eliminations[p]]?.name || '—')}`).join(' · ')}</p>` : '';
   const rq = s.replacement;
   const fb = s.feedback[me] || {};
@@ -409,7 +412,7 @@ screens.result = () => {
   else if (rq) repl = `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants a replacement</b> (${esc({ busy: 'too busy', closed: 'it’s closed', changed: 'changed our minds', other: 'other' }[rq.reason])}).<div class="row" style="margin-top:8px">${btn('Approve', 'repl-answer', { arg: 'yes', cls: 'small' })}${btn('No, we’re going', 'repl-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
   else repl = `<label class="field" for="why">Why?</label><select id="why" data-change="reason">${[['busy', 'Too busy'], ['closed', 'It’s closed'], ['changed', 'Changed our minds'], ['other', 'Other']].map(([k, l]) => `<option value="${k}" ${ui.reason === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div style="margin-top:10px">${btn('Offer a Replacement', 'repl-request', { cls: 'wide secondary' })}</div><p class="hint">Both of you have to approve. Tonight’s vetoes stay vetoed. A “closed” or “busy” report only applies to tonight.</p>`;
-  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}</div>
+  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc)}${drinksHtml(sc)}</div>
   ${res.sameVote ? `<div class="notice">You both vetoed the same place. A shocking development in the ‘I don’t care’ household.</div>` : ''}
   <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}${sc && (sc.share || sc.picks.some((p) => p.bothWanted)) ? '<li>You two actually agreed on something. Mark the calendar.</li>' : ''}</ul>${votes}</div>
   ${b ? `<div class="panel"><div class="eyebrow">Backup</div><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.cuisine)} · ~$${b.price}/person</p></div>` : '<div class="panel small muted">No backup available under tonight’s rules.</div>'}
@@ -528,22 +531,15 @@ function act(name, arg) {
     case 'handoff-cancel': ui.handoff = false; return render();
     case 'handoff-confirm': ui.handoff = false; ui.veto = null; ui.reqDraft = null; me = other(me); setSeat(me); route = null; return go(defaultRoute());
     case 'vibe': {
-      const s = ses();
-      const sel = s ? [...s.settings.vibes] : ui.vibeDraft;
+      const sel = [...myVibes()];
       const i = sel.indexOf(arg);
-      if (i >= 0) { if (sel.length === 1 && s) return toast('Pick at least one vibe.'); sel.splice(i, 1); }
-      else {
-        const chk = canAddVibe(sel, arg);
-        if (!chk.ok) return toast(chk.why);
-        sel.push(arg);
-      }
-      if (s) state = S.setVibes(me, sel); else ui.vibeDraft = sel;
+      if (i >= 0) { if (sel.length === 1 && ses()) return toast('Pick at least one. You’re up for something.'); sel.splice(i, 1); } else sel.push(arg);
+      if (ses()) state = S.setVibes(me, sel); else ui.vibeDraft = sel;
       return render();
     }
     case 'vibes-next':
-      if (!ses()) { state = S.startSession(me, ui.vibeDraft); ui.vibeDraft = []; }
-      return go('setup');
-    case 'set-method': return patchSettings({ method: arg });
+      if (!ses()) { state = S.startSession(me, ui.vibeDraft); ui.vibeDraft = []; return go('setup'); }
+      return go(ses().startedBy === me && !ses().candidates ? 'setup' : ses().candidates ? 'final' : 'lobby');
     case 'set-drinks': return patchSettings({ drinks: arg === '1' });
     case 'set-budget':
       if (arg === 'custom') { ui.customBudget = true; return render(); }
@@ -552,7 +548,7 @@ function act(name, arg) {
     case 'set-time': return patchSettings({ time: { ...(draftSettings().time), kind: arg } });
     case 'send-request': state = S.requestSettings(me, ui.reqDraft); ui.reqDraft = null; toast('Request sent. Diplomacy!'); return go('lobby');
     case 'req-answer': state = S.answerSettingsRequest(me, arg === 'yes'); return render();
-    case 'start': state = S.beginSwiping(me); return go('swipe');
+    case 'start': if (!myVibes().length) return go('vibes'); state = S.beginSwiping(me); return go('swipe');
     case 'empty-fix': state = S.setSettings(me, JSON.parse(arg)); state = S.beginSwiping(me); return render();
     case 'skip':
       if (!myRound().deck.length) state = S.beginSwiping(me);
