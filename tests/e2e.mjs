@@ -53,6 +53,10 @@ await check('Setup: no dine-in option for Stay In + Just Us (delivery only)', as
   assert.match(t, /Delivery/);
 });
 
+await check('Cocktails too? only offered for dine-in', async () => {
+  assert.ok(!/Cocktails too\?/.test(await text(A)), 'not offered for delivery');
+});
+
 await check('Back from setup → vibes preserves selection', async () => {
   await A.getByRole('button', { name: '← Back', exact: true }).click();
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 2);

@@ -42,6 +42,7 @@ export function startSession(me, vibes) {
         radius: prof.radius ?? DEMO_REGION.radius,
         location: { name: prof.home || DEMO_REGION.name, lat: DEMO_REGION.lat, lng: DEMO_REGION.lng },
         deliveryAddress: null,
+        drinks: false, // "Cocktails too?" (dine-in only)
       },
       settingsRequest: null,
       rounds: { A: emptyRound(), B: emptyRound() },

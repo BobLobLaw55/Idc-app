@@ -52,6 +52,29 @@ export function excludedFor(ctx, rid) {
   );
 }
 
+export const DRINKS = ['beer', 'wine', 'cocktails'];
+/** "Cocktails too?" only applies to dine-in nights. */
+export const drinksOn = (s) => !!s?.drinks && s.method === 'dinein';
+
+/** What each person would drink here, and what you both like that they pour. */
+export function drinkMatch(r, ctx) {
+  const per = PEOPLE.map((p) => {
+    const likes = ctx.profiles[p].drinks || [];
+    return { likes, served: likes.filter((d) => r.bar?.includes(d)) };
+  });
+  const together = per[0].served.filter((d) => per[1].served.includes(d));
+  return { bar: r.bar || [], per, together };
+}
+
+function drinkBonus(ctx, r) {
+  if (!drinksOn(ctx.settings)) return 0;
+  const m = drinkMatch(r, ctx);
+  let b = 0;
+  for (const p of m.per) if (p.likes.length) b += p.served.length ? 0.04 : -0.04;
+  if (m.together.length) b += 0.02;
+  return b;
+}
+
 /** Non-food hard constraints. Returns null if OK, or a reason string. */
 export function placeBlocker(r, ctx) {
   const s = ctx.settings;
@@ -61,6 +84,7 @@ export function placeBlocker(r, ctx) {
   if (distanceMiles(s.location, r) > s.radius) return 'outside search radius';
   if (!openAt(r, mealHour(s.time, ctx.now), s.method)) return 'closed at meal time';
   if (s.budget && r.price > s.budget * CONFIG.budgetSlack) return 'over budget';
+  if (drinksOn(s) && !r.bar?.length) return 'no bar';
   return null;
 }
 
@@ -169,8 +193,8 @@ export function scoreRestaurant(r, ctx, opts = {}) {
     verification: picks.reduce((t, p) => t + (p.item.verification === 'dish' ? 1 : 0.6), 0) / 2,
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
-  const score = base + vibeBonus(ctx, r, picks) + historyBonus(ctx, r.id);
-  return { r, id: r.id, score, parts, picks, share, miles };
+  const score = base + vibeBonus(ctx, r, picks) + historyBonus(ctx, r.id) + drinkBonus(ctx, r);
+  return { r, id: r.id, score, parts, picks, share, miles, drinks: drinksOn(s) ? drinkMatch(r, ctx) : null };
 }
 
 export function rankRestaurants(ctx, opts) {

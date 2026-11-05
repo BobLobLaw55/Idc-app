@@ -154,6 +154,8 @@ input[type='text'], input[type='number'], input[type='time'], select {
 .pair > div { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; }
 .pair b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .both { display: block; margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--pink); }
+.drinks { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }
+.drinks b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .share { background: #2c1f2a; border: 1px dashed #6a3d52; border-radius: 12px; padding: 10px; font-size: 14px; margin: 0 0 10px; }
 .share b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--pink); margin-bottom: 2px; }
 .share .both { display: inline; margin-left: 4px; }

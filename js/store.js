@@ -15,12 +15,12 @@ const listeners = new Set();
 export const DEFAULT_PROFILES = {
   A: {
     name: 'You', prefs: { wings: 'love', steak: 'like', burger: 'like', sushi: 'never' },
-    allergies: [], diet: 'none', excludedRestaurants: [], favoriteRestaurants: [],
+    allergies: [], diet: 'none', drinks: ['beer', 'cocktails'], excludedRestaurants: [], favoriteRestaurants: [],
     home: 'Alachua, FL', radius: 25, budget: 25,
   },
   B: {
     name: 'Partner', prefs: { pizza: 'love', alfredo: 'love', burger: 'like', sushi: 'dislike' },
-    allergies: [], diet: 'none', excludedRestaurants: [], favoriteRestaurants: [],
+    allergies: [], diet: 'none', drinks: ['wine', 'cocktails'], excludedRestaurants: [], favoriteRestaurants: [],
     home: 'Alachua, FL', radius: 25, budget: 25,
   },
 };

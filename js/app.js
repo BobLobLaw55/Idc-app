@@ -4,7 +4,7 @@ import { other, ctxOf } from './session.js';
 import { VIBES, VIBE_BY_ID, canAddVibe, methodChoices, METHOD_LABEL } from './data/vibes.js';
 import { FOODS, FOOD_BY_ID, GROUPS, ALLERGENS, photoUrl, foodName } from './data/foods.js';
 import { RESTAURANTS, RESTAURANT_BY_ID } from './data/restaurants.js';
-import { scoreRestaurant, pickLabel, distanceMiles } from './engine/match.js';
+import { scoreRestaurant, pickLabel, distanceMiles, DRINKS, drinksOn } from './engine/match.js';
 import { LEVELS, prefOf } from './engine/prefs.js';
 
 const app = document.getElementById('app');
@@ -102,7 +102,7 @@ function title(eyebrow, h, sub) {
 function settingsSummary(st) {
   const vibes = st.vibes.map((v) => esc(VIBE_BY_ID[v].name)).join(' + ');
   const time = st.time.kind === 'asap' ? 'ASAP' : st.time.kind === 'later' ? 'Later tonight' : `At ${esc(st.time.at)}`;
-  return `${vibes} · ${METHOD_LABEL[st.method]} · ${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
+  return `${vibes} · ${METHOD_LABEL[st.method]}${drinksOn(st) ? ' + drinks' : ''} · ${money(st.budget)}${st.budget ? '/person' : ''} · ${time} · ${st.radius} mi of ${esc(st.location.name)}`;
 }
 
 // ───────────────────────── screens
@@ -151,6 +151,9 @@ function setupControls(st, editable) {
     ? `<p class="muted">${METHOD_LABEL[methods[0]]} — that’s what ${st.vibes.map((v) => esc(VIBE_BY_ID[v].name)).join(' + ')} means.</p>`
     : `<div class="chips" role="group" aria-label="Dining method">${methods.map((m) => chip(METHOD_LABEL[m], 'set-method', m, st.method === m)).join('')}</div>`}
   ${['delivery', 'either'].includes(st.method) ? `<label class="field" for="addr">Delivery address</label><input id="addr" type="text" data-change="addr" ${dis} value="${esc(st.deliveryAddress?.name || '')}" placeholder="Home (demo uses the Alachua area)"><p class="hint">Real delivery eligibility depends on the actual address and the provider. Demo restaurants use a pretend delivery radius.</p>` : ''}
+  ${st.method === 'dinein' ? `<label class="field">Cocktails too?</label>
+  <div class="chips" role="group" aria-label="Drinks">${chip('Yes, drinks too 🍸', 'set-drinks', '1', !!st.drinks)}${chip('Just food', 'set-drinks', '0', !st.drinks)}</div>
+  <p class="hint">We’ll only pick places with a bar, then match beer, wine or cocktails to what you each like (set in your profile).</p>` : ''}
   <label class="field">Budget per person</label>
   <div class="chips" role="group" aria-label="Budget">${budgetPreset.map((b) => chip(b ? `$${b}` : 'No set limit', 'set-budget', String(b ?? ''), st.budget === b)).join('')}${chip('Custom', 'set-budget', 'custom', custom)}</div>
   ${custom || ui.customBudget ? `<input type="number" min="5" max="300" inputmode="numeric" aria-label="Custom budget per person" data-change="budget" ${dis} value="${st.budget || ''}" style="margin-top:8px">` : ''}
@@ -198,6 +201,7 @@ function requestPanel() {
   if (c.radius !== undefined && c.radius !== cur.radius) diff.push(`Radius → ${c.radius} mi`);
   if (c.time && JSON.stringify(c.time) !== JSON.stringify(cur.time)) diff.push(`Time → ${c.time.kind === 'at' ? c.time.at : c.time.kind === 'asap' ? 'ASAP' : 'Later tonight'}`);
   if (c.location && c.location.name !== cur.location.name) diff.push(`Area → ${esc(c.location.name)}`);
+  if (c.drinks !== undefined && !!c.drinks !== !!cur.drinks) diff.push(c.drinks ? 'Drinks too 🍸' : 'Just food, no bar needed');
   if (rq.from === me) return `<div class="notice">Change request sent. Waiting for ${nameOf(other(me))} to approve.</div>`;
   return `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants to change the plan${rq.note ? ` (${esc(rq.note)})` : ''}:</b><br>${diff.join(' · ') || 'No actual changes. Bold move.'}
     <div class="row" style="margin-top:10px">${btn('Approve', 'req-answer', { arg: 'yes', cls: 'small' })}${btn('Nope', 'req-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
@@ -295,6 +299,20 @@ function venueFacts(r, scored) {
   return `<div class="facts"><span class="pill">${esc(r.cuisine)}</span><span class="pill">${miles.toFixed(1)} mi</span><span class="pill">~$${r.price}/person</span><span class="pill">${fmtHour(r.hours[0])}–${fmtHour(r.hours[1])}</span><span class="pill">${['dinein', 'pickup', 'delivery'].filter((k) => r.services[k]).map((k) => METHOD_LABEL[k]).join(' · ')}</span></div>`;
 }
 
+const cap = (w) => w[0].toUpperCase() + w.slice(1);
+const DRINK_FOR_TWO = { beer: 'Beers for two', wine: 'Wine for two', cocktails: 'Cocktails for two' };
+
+/** "Cocktails too?" line: what each of you would drink here. Only on drinks nights. */
+function drinksHtml(scored) {
+  const d = scored?.drinks;
+  if (!d) return '';
+  const lines = d.per.map((p, i) => {
+    if (!p.likes.length) return null;
+    return `${nameOf(i ? 'B' : 'A')}: ${p.served.length ? p.served.map(cap).join(' or ') : `no ${p.likes.join(' or ')} here`}`;
+  }).filter(Boolean);
+  return `<div class="drinks"><b>🍸 At the bar</b>${d.bar.map(cap).join(' · ')}${lines.length ? `<span class="small muted" style="display:block">${lines.join(' · ')}</span>` : ''}${d.together.length ? `<span class="both">♥ ${DRINK_FOR_TWO[d.together.includes('cocktails') ? 'cocktails' : d.together[0]]}</span>` : ''}</div>`;
+}
+
 function pairHtml(scored) {
   if (!scored) return '<p class="small muted">This place no longer meets tonight’s rules.</p>';
   const sh = scored.share;
@@ -349,7 +367,7 @@ function venueCard(id, canVeto) {
   const sc = scoreOf(id);
   const mineVetoed = ses().eliminations?.[me] === id || ui.veto === id;
   return `<article class="venue ${mineVetoed ? 'vetoed' : ''}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">Demo</span></div>
-    ${venueFacts(r, sc)}${pairHtml(sc)}
+    ${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}
     <div class="row">${btn('Details', 'go', { arg: `details:${id}`, cls: 'small secondary' })}${canVeto ? btn('Eliminate', 'veto', { arg: id, cls: 'small danger', aria: `Eliminate ${r.name}` }) : ''}</div></article>`;
 }
 
@@ -360,9 +378,10 @@ screens.details = (rid) => {
   const pend = state.group.pendingExclusions[rid];
   const vb = { dish: 'Verified dish', category: 'Category only', unverified: 'Unverified — not used' };
   return `${title(esc(r.cuisine), esc(r.name), `${r.atmosphere.join(' · ')} · fictional demo restaurant`)}
-  ${venueFacts(r, sc)}${pairHtml(sc)}
+  ${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}
   <div class="panel"><h2>Menu (demo)</h2>${r.menu.map((m) => `<div class="pref-row"><span>${esc(m.name || foodName(m.foods[0]))}${m.price ? ` · $${m.price}` : ''}</span><span class="pill">${vb[m.verification]}</span></div>`).join('')}
     <p class="hint">Source: ${esc(r.source)} · verified ${esc(r.verifiedOn)} · Menu link: none (not a real restaurant).</p></div>
+  <div class="panel small"><b>Drinks (demo):</b> ${r.bar.length ? r.bar.map(cap).join(' · ') : 'No alcohol served'}</div>
   <div class="notice warn">Allergies? Menu matches are not allergy guarantees. Always confirm with the restaurant.</div>
   <div class="panel stack"><h2>Your relationship with this place</h2>
     <label class="check"><input type="checkbox" data-change="fav" data-arg="${rid}" ${prof.favoriteRestaurants.includes(rid) ? 'checked' : ''}> Favorite</label>
@@ -390,7 +409,7 @@ screens.result = () => {
   else if (rq) repl = `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants a replacement</b> (${esc({ busy: 'too busy', closed: 'it’s closed', changed: 'changed our minds', other: 'other' }[rq.reason])}).<div class="row" style="margin-top:8px">${btn('Approve', 'repl-answer', { arg: 'yes', cls: 'small' })}${btn('No, we’re going', 'repl-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
   else repl = `<label class="field" for="why">Why?</label><select id="why" data-change="reason">${[['busy', 'Too busy'], ['closed', 'It’s closed'], ['changed', 'Changed our minds'], ['other', 'Other']].map(([k, l]) => `<option value="${k}" ${ui.reason === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div style="margin-top:10px">${btn('Offer a Replacement', 'repl-request', { cls: 'wide secondary' })}</div><p class="hint">Both of you have to approve. Tonight’s vetoes stay vetoed. A “closed” or “busy” report only applies to tonight.</p>`;
-  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${pairHtml(sc)}</div>
+  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${pairHtml(sc)}${drinksHtml(sc)}</div>
   ${res.sameVote ? `<div class="notice">You both vetoed the same place. A shocking development in the ‘I don’t care’ household.</div>` : ''}
   <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}${sc && (sc.share || sc.picks.some((p) => p.bothWanted)) ? '<li>You two actually agreed on something. Mark the calendar.</li>' : ''}</ul>${votes}</div>
   ${b ? `<div class="panel"><div class="eyebrow">Backup</div><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.cuisine)} · ~$${b.price}/person</p></div>` : '<div class="panel small muted">No backup available under tonight’s rules.</div>'}
@@ -416,6 +435,8 @@ screens.profile = () => {
     <div style="flex:1"><label class="field" for="pbud">Default budget</label><select id="pbud" data-change="pbudget">${[15, 25, 40, 0].map((b) => `<option ${(p.budget || 0) === b ? 'selected' : ''} value="${b}">${b ? '$' + b : 'No limit'}</option>`).join('')}</select></div></div>
     <label class="field" for="diet">Dietary requirement</label><select id="diet" data-change="diet"><option value="none" ${p.diet !== 'vegetarian' ? 'selected' : ''}>None</option><option value="vegetarian" ${p.diet === 'vegetarian' ? 'selected' : ''}>Vegetarian</option></select>
   </div>
+  <div class="panel"><h2>Drinks you like</h2><p class="small muted">Used when you say “Cocktails too?”. Leave all unchecked if you’re not drinking.</p>
+    <div class="wrap-row">${DRINKS.map((d) => `<label class="check" style="margin-right:14px"><input type="checkbox" data-change="drink" data-arg="${d}" ${(p.drinks || []).includes(d) ? 'checked' : ''}> ${cap(d)}</label>`).join('')}</div></div>
   <div class="panel"><h2>Allergies</h2><p class="small muted">Stored separately from dislikes. We keep matching dishes away from these categories, but <b>a menu match is never an allergy guarantee</b> — confirm with the restaurant.</p>
     <div class="wrap-row">${ALLERGENS.map((a) => `<label class="check" style="margin-right:12px"><input type="checkbox" data-change="allergy" data-arg="${a}" ${p.allergies.includes(a) ? 'checked' : ''}> ${a}</label>`).join('')}</div></div>
   <div class="panel"><h2>Food preferences</h2><p class="small muted">Love · Like · Neutral · Dislike · Never. “Never” means we never suggest it <i>for you</i> — a place that serves it can still win if it has something else you like.</p>
@@ -523,6 +544,7 @@ function act(name, arg) {
       if (!ses()) { state = S.startSession(me, ui.vibeDraft); ui.vibeDraft = []; }
       return go('setup');
     case 'set-method': return patchSettings({ method: arg });
+    case 'set-drinks': return patchSettings({ drinks: arg === '1' });
     case 'set-budget':
       if (arg === 'custom') { ui.customBudget = true; return render(); }
       ui.customBudget = false;
@@ -600,6 +622,12 @@ app.addEventListener('change', (e) => {
     case 'pradius': state = S.setProfile(me, { radius: Number(v) }); return undefined;
     case 'pbudget': state = S.setProfile(me, { budget: Number(v) || null }); return undefined;
     case 'diet': state = S.setProfile(me, { diet: v }); return undefined;
+    case 'drink': {
+      const list = new Set(state.profiles[me].drinks || []);
+      el.checked ? list.add(arg) : list.delete(arg);
+      state = S.setProfile(me, { drinks: DRINKS.filter((d) => list.has(d)) });
+      return undefined;
+    }
     case 'allergy': {
       const list = new Set(state.profiles[me].allergies);
       el.checked ? list.add(arg) : list.delete(arg);

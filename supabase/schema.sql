@@ -22,6 +22,7 @@ create table users (
   default_radius_mi int not null default 25 check (default_radius_mi between 1 and 100),
   default_budget int check (default_budget is null or default_budget between 5 and 500),
   diet text not null default 'none' check (diet in ('none', 'vegetarian', 'vegan')),
+  drinks text[] not null default '{}' check (drinks <@ array['beer', 'wine', 'cocktails']),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -96,6 +97,7 @@ create table restaurants (
   price_per_person int,
   atmosphere text[] not null default '{}',   -- romantic, upscale, casual
   dine_in boolean, pickup boolean, delivery boolean,  -- null = unknown (never treated as yes)
+  bar text[] check (bar <@ array['beer', 'wine', 'cocktails']),  -- null = unknown; '{}' = no alcohol
   status text not null default 'active' check (status in ('active', 'closed', 'temporarily_closed')),
   menu_verified_on date,
   source_id uuid references restaurant_sources,
@@ -173,6 +175,7 @@ create table dining_sessions (
   radius_mi int not null,
   search_point geography(point) not null,
   delivery_point geography(point),
+  drinks boolean not null default false,            -- "Cocktails too?" (dine-in only)
   seed bigint not null,
   stage text not null default 'choosing' check (stage in ('choosing', 'final_three', 'decided', 'closed')),
   created_at timestamptz not null default now()

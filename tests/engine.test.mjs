@@ -267,6 +267,25 @@ test('Quick and Healthy vibes steer cards and places', () => {
   assert.ok(h > base * 1.3, `healthy ${h} vs casual ${base}`);
 });
 
+test('Cocktails too: only bars qualify, matched to each person’s drinks', () => {
+  const r = { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } };
+  const prefs = { steak: 'love', burger: 'love', wings: 'like', pizza: 'like' };
+  const mk = (drinks, da, db) => ctx({ rounds: r, settings: { vibes: ['casual'], method: 'dinein', drinks },
+    profiles: { A: { prefs, allergies: [], drinks: da }, B: { prefs, allergies: [], drinks: db } } });
+  const on = rankRestaurants(mk(true, ['cocktails'], ['cocktails']));
+  assert.ok(on.length >= 3);
+  for (const x of on) assert.ok(x.r.bar.length, `${x.r.name} has no bar`);
+  assert.ok(on.slice(0, 3).every((x) => x.r.bar.includes('cocktails')), on.slice(0, 3).map((x) => x.r.name).join());
+  assert.deepEqual(on[0].drinks.together, ['cocktails']);
+  // off → places without a bar are back in play, and no drinks info is attached
+  const off = rankRestaurants(mk(false, ['cocktails'], ['cocktails']));
+  assert.ok(off.length > on.length);
+  assert.equal(off[0].drinks, null);
+  // drinks toggle is ignored for delivery nights
+  const del = ctx({ rounds: r, settings: { vibes: ['delivery'], method: 'delivery', drinks: true }, profiles: { A: { prefs, allergies: [] }, B: { prefs, allergies: [] } } });
+  assert.ok(rankRestaurants(del).some((x) => !x.r.bar.length));
+});
+
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {
   for (const r of RESTAURANTS) {
     assert.equal(r.demo, true);
