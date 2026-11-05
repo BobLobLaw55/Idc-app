@@ -1,0 +1,32 @@
+name: photo-review
+
+# Manually triggered: builds contact sheets (current photo vs. alternatives for every food)
+# and pushes them to the `photo-review` branch for a human/Claude to inspect.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sheets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow==11.0.0
+      - name: Build contact sheets
+        run: python tools/photo_review.py
+      - name: Push to photo-review branch
+        run: |
+          cp -r photo-review /tmp/pr
+          git config user.name "photo-review bot"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan photo-review
+          git rm -rqf .
+          cp -r /tmp/pr/* .
+          git add -A
+          git commit -qm "Photo review sheets for ${GITHUB_SHA::7}"
+          git push -f origin photo-review
