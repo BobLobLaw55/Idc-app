@@ -1,15 +1,25 @@
 name: photo-review
 
-# Manually triggered: builds contact sheets (current photo vs. alternatives for every food)
-# and pushes them to the `photo-review` branch for a human/Claude to inspect.
+# Manually triggered.
+#  - review: contact sheets (current photo vs. CC0/public-domain candidates) → `photo-review` branch
+#  - picks:  downloads chosen candidates into img/food/ (+ CREDITS.json) → `photo-review` branch
 on:
   workflow_dispatch:
+    inputs:
+      review_ids:
+        description: 'Comma-separated food ids to review (empty = all)'
+        required: false
+        default: ''
+      picks:
+        description: 'JSON {food_id: openverse_id} to download (skips review)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
-  sheets:
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -17,16 +27,19 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install pillow==11.0.0
-      - name: Build contact sheets
+      - name: Review or apply picks
+        env:
+          REVIEW_IDS: ${{ inputs.review_ids }}
+          PICKS: ${{ inputs.picks }}
         run: python tools/photo_review.py
-      - name: Push to photo-review branch
+      - name: Push results to photo-review branch
         run: |
-          cp -r photo-review /tmp/pr
+          mkdir -p /tmp/pr && cp -r photo-review/. /tmp/pr/ && { [ -d img/food ] && cp -r img/food /tmp/pr/food || true; }
           git config user.name "photo-review bot"
           git config user.email "actions@users.noreply.github.com"
           git checkout --orphan photo-review
           git rm -rqf .
-          cp -r /tmp/pr/* .
+          cp -r /tmp/pr/. .
           git add -A
-          git commit -qm "Photo review sheets for ${GITHUB_SHA::7}"
+          git commit -qm "Photo review for ${GITHUB_SHA::7}"
           git push -f origin photo-review

@@ -1,8 +1,13 @@
 // Verifies every food photo URL resolves to an image. Needs open internet (runs in CI).
+import { existsSync } from 'node:fs';
 import { FOODS, photoUrl } from '../js/data/foods.js';
 
 const bad = [];
 await Promise.all(FOODS.map(async (f) => {
+  if (f.photo.startsWith('local:')) {
+    if (!existsSync(new URL(`../${photoUrl(f)}`, import.meta.url))) bad.push(`${f.id} → missing local file ${photoUrl(f)}`);
+    return;
+  }
   try {
     const res = await fetch(photoUrl(f, 200), { method: 'GET' });
     const type = res.headers.get('content-type') || '';

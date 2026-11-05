@@ -5,7 +5,8 @@
 //   veg       — true if a vegetarian version is common (does NOT mean every version is vegetarian)
 //   allergens — common allergens for the category; used to keep a person's matched dish away from
 //               their declared allergies. This is a coarse safety screen, never an allergy guarantee.
-//   photo     — Unsplash photo id (Unsplash License: free to use). Photos are REPRESENTATIVE of the
+//   photo     — Unsplash photo id (Unsplash License), or 'local:<file>' for a self-hosted CC0/public-domain
+//               photo in img/food/. Photos are REPRESENTATIVE of the
 //               category and are never presented as a specific restaurant's dish.
 //
 // Photos are swappable in one place: change the `photo` id below.
@@ -116,6 +117,8 @@ export const SHAREABLE = new Set(['wings', 'wingsboneless', 'nachos', 'loadedfri
 export const ALLERGENS = ['shellfish', 'fish', 'peanuts', 'nuts', 'dairy', 'egg', 'gluten', 'soy', 'sesame'];
 
 export function photoUrl(food, w = 900) {
+  // 'local:<file>' = self-hosted CC0/public-domain photo in img/food/ (see img/food/CREDITS.json)
+  if (food.photo.startsWith('local:')) return `img/food/${food.photo.slice(6)}`;
   return `https://images.unsplash.com/photo-${food.photo}?auto=format&fit=crop&w=${w}&q=75`;
 }
 
