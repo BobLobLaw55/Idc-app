@@ -143,6 +143,7 @@ input[type='text'], input[type='number'], input[type='time'], select {
 
 .review-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .review-item img { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: var(--panel2); flex: none; }
+.noimg-thumb { width: 52px; height: 52px; border-radius: 12px; flex: none; background: radial-gradient(circle at 30% 20%, #6a4050, #2a1f2e 70%); }
 .review-item .nm { flex: 1; font-weight: 700; }
 .review-item select { width: auto; min-height: 40px; padding: 6px 8px; }
 

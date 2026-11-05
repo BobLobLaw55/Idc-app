@@ -225,11 +225,11 @@ function cardHtml(id, top) {
   const f = FOOD_BY_ID[id];
   const lvl = prefOf(state.profiles[me], id);
   return `<div class="card ${top ? 'top' : 'under'}" ${top ? 'tabindex="0" aria-label="' + esc(f.name) + '. Swipe right for yes, left for nah, up for really want this."' : 'aria-hidden="true"'}>
-    <img src="${photoUrl(f)}" alt="Representative photo of ${esc(f.name)}" data-fallback ${top ? 'fetchpriority="high"' : 'loading="lazy"'}>
+    ${photoUrl(f) ? `<img src="${photoUrl(f)}" alt="Representative photo of ${esc(f.name)}" data-fallback ${top ? 'fetchpriority="high"' : 'loading="lazy"'}>` : ''}
     <div class="fallback" aria-hidden="true">${esc(f.group)}</div>
     ${lvl === 'love' ? '<span class="pill badge">Saved favorite</span>' : ''}
     <div class="stamp yes">YES</div><div class="stamp no">NAH</div><div class="stamp really">REALLY WANT</div>
-    <div class="shade"><div class="name">${esc(f.name)}</div><div class="meta">${esc(f.group)} · representative photo, not a specific restaurant’s dish</div></div>
+    <div class="shade"><div class="name">${esc(f.name)}</div><div class="meta">${esc(f.group)} · ${photoUrl(f) ? 'representative photo, not a specific restaurant’s dish' : 'photo coming soon'}</div></div>
   </div>`;
 }
 
@@ -276,7 +276,7 @@ screens.review = () => {
   const locked = r.status === 'ready';
   const seen = r.deck.filter((id) => r.answers[id]);
   return `${title('Your picks', 'Your cravings, reviewed.', locked ? 'Only you can see these. They’re locked in — unlock from the lobby to edit (until results are generated).' : 'Only you can see these. Change anything before you submit.')}
-  <div class="panel">${seen.length ? seen.map((id) => `<div class="review-item"><img src="${photoUrl(FOOD_BY_ID[id], 120)}" alt="" data-fallback><span class="nm">${esc(foodName(id))}</span>
+  <div class="panel">${seen.length ? seen.map((id) => `<div class="review-item">${photoUrl(FOOD_BY_ID[id], 120) ? `<img src="${photoUrl(FOOD_BY_ID[id], 120)}" alt="" data-fallback>` : '<span class="noimg-thumb" aria-hidden="true"></span>'}<span class="nm">${esc(foodName(id))}</span>
     <select aria-label="Answer for ${esc(foodName(id))}" data-change="review" data-arg="${id}" ${locked ? 'disabled' : ''}>${Object.entries(ANS_LABEL).map(([k, l]) => `<option value="${k}" ${r.answers[id] === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
     : `<p class="muted">${r.mode === 'skip' ? 'You skipped the swipes — we’re using your saved profile.' : 'Nothing answered yet.'}</p>`}</div>
   ${locked ? btn('Back to the lobby', 'go', { arg: 'lobby', cls: 'wide secondary' }) : btn('Back to swiping', 'go', { arg: 'swipe', cls: 'wide secondary' })}`;

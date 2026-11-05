@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs';
 import { FOODS, photoUrl } from '../js/data/foods.js';
 
 const bad = [];
-await Promise.all(FOODS.map(async (f) => {
+const pending = FOODS.filter((f) => !f.photo).map((f) => f.id);
+await Promise.all(FOODS.filter((f) => f.photo).map(async (f) => {
   if (f.photo.startsWith('local:')) {
     if (!existsSync(new URL(`../${photoUrl(f)}`, import.meta.url))) bad.push(`${f.id} → missing local file ${photoUrl(f)}`);
     return;
@@ -14,5 +15,6 @@ await Promise.all(FOODS.map(async (f) => {
     if (!res.ok || !type.startsWith('image/')) bad.push(`${f.id} → HTTP ${res.status} ${type}`);
   } catch (e) { bad.push(`${f.id} → ${e.message}`); }
 }));
-console.log(`${FOODS.length - bad.length}/${FOODS.length} food photos OK`);
+console.log(`${FOODS.length - pending.length - bad.length}/${FOODS.length - pending.length} food photos OK`);
+if (pending.length) console.log(`No verified photo yet (text card shown): ${pending.join(', ')}`);
 if (bad.length) { console.log('BROKEN:\n' + bad.join('\n')); process.exit(1); }

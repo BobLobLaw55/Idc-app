@@ -23,7 +23,7 @@ A two-person dinner decider. Each person swipes on foods (or taps **idc. You Kno
 | Different dish for each of you when you want similar things; “You both wanted this” + shared starters | ✅ Built |
 | Session setup: budget presets + custom, time, radius, area | ✅ Built |
 | Partner requests settings changes instead of silently overriding them | ✅ Built |
-| 72 food categories with photo cards (Unsplash), randomized decks | ✅ Built |
+| 72 food categories with photo cards, randomized decks. Photos are visually reviewed: 10 mismatches replaced with self-hosted CC0 photos, 3 foods still waiting for a verified photo | ✅ Built (photos temporary) |
 | Deck mix 50% personal / 30% vibe / 20% discovery, with fewer repeats across sessions | ✅ Built |
 | Partner-aware cards (~30%), applied privately | ✅ Built |
 | Swipe gestures, tap buttons, keyboard; Undo; Back on every screen | ✅ Built |

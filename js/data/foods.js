@@ -31,7 +31,7 @@ const RAW = [
   // ── Upscale / date night
   ['filet', 'Filet Mignon', 'Steakhouse', 'date fancy', 0, '', '1600891964092-4316c288032e'],
   ['ribeye', 'Ribeye', 'Steakhouse', 'date fancy', 0, '', '1558030006-450675393462'],
-  ['lamb', 'Lamb Chops', 'Steakhouse', 'date fancy', 0, '', '1514516345957-556ca7d90a29'],
+  ['lamb', 'Lamb Chops', 'Steakhouse', 'date fancy', 0, '', ''],
   ['risotto', 'Risotto', 'Italian', 'date fancy', 1, 'dairy', '1476124369491-e7addf5db371'],
   ['scallops', 'Seared Scallops', 'Seafood', 'date fancy healthy', 0, 'shellfish', 'local:scallops.jpg'],
   ['charcuterie', 'Charcuterie & Small Plates', 'Shareable', 'date fancy', 1, 'dairy gluten nuts', '1452195100486-9cc805987862'],
@@ -52,7 +52,7 @@ const RAW = [
   ['enchiladas', 'Enchiladas', 'Mexican', 'casual couch deliver', 1, 'dairy', '1534352956036-cd81e27dd615'],
   ['fajitas', 'Fajitas', 'Mexican', 'date casual healthy', 1, '', 'local:fajitas.jpg'],
   ['nachos', 'Nachos', 'Mexican', 'casual couch deliver', 1, 'dairy', '1513456852971-30c0b8199d4d'],
-  ['burritobowl', 'Burrito Bowls', 'Mexican', 'casual grab deliver healthy', 1, '', '1543352634-99a5d50ae78e'],
+  ['burritobowl', 'Burrito Bowls', 'Mexican', 'casual grab deliver healthy', 1, '', ''],
   // ── Seafood
   ['sushi', 'Sushi', 'Seafood', 'date fancy couch deliver healthy', 1, 'fish shellfish soy', '1579871494447-9811cf80d66c'],
   ['premiumsushi', 'Chef’s Sushi & Sashimi', 'Seafood', 'date fancy healthy', 0, 'fish soy', '1553621042-f6e147245754'],
@@ -62,7 +62,7 @@ const RAW = [
   ['fishtacos', 'Fish Tacos', 'Seafood', 'casual grab healthy', 0, 'fish', '1512838243191-e81e8f66f1fd'],
   ['crabcakes', 'Crab Cakes', 'Seafood', 'date fancy casual', 0, 'shellfish egg gluten', 'local:crabcakes.jpg'],
   ['seafoodpasta', 'Seafood Pasta', 'Seafood', 'date fancy', 0, 'shellfish gluten dairy', '1563379926898-05f4575a45d8'],
-  ['oysters', 'Oysters', 'Seafood', 'date fancy', 0, 'shellfish', '1599021456807-25db0f974333'],
+  ['oysters', 'Oysters', 'Seafood', 'date fancy', 0, 'shellfish', 'local:oysters.jpg'],
   ['mahi', 'Blackened Fish', 'Seafood', 'date casual healthy', 0, 'fish', '1519708227418-c8fd9a32b7a2'],
   // ── Asian
   ['ramen', 'Ramen', 'Asian', 'casual couch', 1, 'gluten egg soy', '1569718212165-3a8278d5f624'],
@@ -74,7 +74,7 @@ const RAW = [
   ['curry', 'Curry', 'Asian', 'date casual couch deliver', 1, 'dairy', '1565557623262-b51c2513a641'],
   ['padthai', 'Pad Thai', 'Asian', 'casual couch deliver', 1, 'peanuts egg shellfish soy', '1559314809-0d155014e29e'],
   ['pho', 'Pho', 'Asian', 'casual couch healthy', 0, 'fish', '1582878826629-29b7ad1cdc43'],
-  ['hibachi', 'Hibachi', 'Asian', 'date casual', 0, 'soy egg', '1617196034796-73dfa7b1fd56'],
+  ['hibachi', 'Hibachi', 'Asian', 'date casual', 0, 'soy egg', ''],
   ['generaltso', 'General Tso’s Chicken', 'Asian', 'casual couch deliver', 0, 'gluten soy egg', '1525755662778-989d0524087e'],
   // ── Southern / BBQ
   ['brisket', 'Brisket', 'BBQ', 'casual couch grab', 0, '', '1529193591184-b1d58069ecdd'],
@@ -102,7 +102,7 @@ export const FOODS = RAW.map(([id, name, group, vibes, veg, allergens, photo]) =
   vibes: vibes.split(' '),
   veg: !!veg,
   allergens: allergens ? allergens.split(' ') : [],
-  photo,
+  photo: photo || null, // null = no verified photo yet → designed text card
 }));
 
 export const FOOD_BY_ID = Object.fromEntries(FOODS.map((f) => [f.id, f]));
@@ -117,6 +117,7 @@ export const SHAREABLE = new Set(['wings', 'wingsboneless', 'nachos', 'loadedfri
 export const ALLERGENS = ['shellfish', 'fish', 'peanuts', 'nuts', 'dairy', 'egg', 'gluten', 'soy', 'sesame'];
 
 export function photoUrl(food, w = 900) {
+  if (!food.photo) return null; // never show a photo we haven't verified matches the food
   // 'local:<file>' = self-hosted CC0/public-domain photo in img/food/ (see img/food/CREDITS.json)
   if (food.photo.startsWith('local:')) return `img/food/${food.photo.slice(6)}`;
   return `https://images.unsplash.com/photo-${food.photo}?auto=format&fit=crop&w=${w}&q=75`;

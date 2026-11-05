@@ -51,4 +51,13 @@ Each person makes **one** private move on The Final Three: **Eliminate** one pla
 4. **Production:** owner submissions, specials, photo licensing, broader regions.
 
 ## Photos
-Food cards use Unsplash photos (Unsplash License) as generic, representative images of the category, and they're labeled that way. The card falls back to a designed gradient if an image can't load. `tests/check-photos.mjs` (in CI) verifies every URL.
+Food cards show a **representative** photo of the category (never claimed to be a specific restaurant's dish).
+- Most are Unsplash photos (Unsplash License), hotlinked.
+- Ones that previously showed the wrong food were replaced with **CC0 / public-domain** photos found via Openverse, visually checked, and **self-hosted** in `img/food/` (`photo: 'local:<file>'`). Provenance is in `img/food/CREDITS.json`.
+- Foods with no verified photo yet (`photo: ''` — currently lamb chops, burrito bowls, hibachi) show the designed text card instead of a wrong photo.
+
+**Review workflow** (`.github/workflows/photo-review.yml`, run manually):
+1. `review_ids=steak,lamb` → contact sheets (current photo vs. 8 candidates) on the `photo-review` branch.
+2. Look at the sheets, pick by number, and map picks to Openverse ids from `candidates.json`. Check the title too, since thumbnails can mislead.
+3. `picks={"steak":"<id>"}` → CI downloads 900×900 crops and writes CREDITS.json to the `photo-review` branch. Copy them into `img/food/` and set `photo: 'local:<food>.jpg'`.
+4. CI's `check-photos` verifies every remote URL loads and every local file exists. A URL loading doesn't prove the photo matches the food, so step 2 is a visual review.

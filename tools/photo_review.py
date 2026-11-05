@@ -28,7 +28,7 @@ IMG = os.path.join(ROOT, 'img', 'food')
 os.makedirs(OUT, exist_ok=True)
 
 src = open(os.path.join(ROOT, 'js/data/foods.js'), encoding='utf-8').read()
-FOODS = re.findall(r"\['(\w+)', '([^']+)', '[^']*', '[^']*', \d, '[^']*', '([\w:./-]+)'\]", src)
+FOODS = re.findall(r"\['(\w+)', '([^']+)', '[^']*', '[^']*', \d, '[^']*', '([\w:./-]*)'\]", src)
 assert len(FOODS) > 50, f'parsed only {len(FOODS)} foods'
 BY_ID = {f: (n, p) for f, n, p in FOODS}
 
@@ -69,6 +69,8 @@ def to_img(data, size):
 
 
 def current_img(photo):
+    if not photo:
+        return None
     if photo.startswith('local:'):
         path = os.path.join(IMG, photo[6:])
         return to_img(open(path, 'rb').read(), THUMB) if os.path.exists(path) else None
