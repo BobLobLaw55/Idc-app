@@ -33,24 +33,24 @@ await shot(A, '01-seat');
 await A.getByRole('button', { name: /I’m You/ }).click();
 
 await check('Vibes: up to 3 compatible, contradictory blocked', async () => {
-  await A.getByRole('button', { name: /Make It a Date/ }).click();
-  await A.getByRole('button', { name: /Couch Goblins/ }).click();
+  await A.getByRole('button', { name: /Dress to Impress/ }).click();
+  await A.getByRole('button', { name: /Stay In, Babe/ }).click();
   assert.match(await A.locator('#toast').innerText(), /can’t both happen/);
-  await A.getByRole('button', { name: /Make It a Date/ }).click(); // deselect
-  await A.getByRole('button', { name: /No Big Production/ }).click();
-  await A.getByRole('button', { name: /Couch Goblins/ }).click();
-  await A.getByRole('button', { name: /I’ll Grab It/ }).click();
+  await A.getByRole('button', { name: /Dress to Impress/ }).click(); // deselect
+  await A.getByRole('button', { name: /Just Us, No Fuss/ }).click();
+  await A.getByRole('button', { name: /Stay In, Babe/ }).click();
+  await A.getByRole('button', { name: /Hot & Healthy/ }).click();
   assert.equal(await A.locator('.choice[aria-pressed="true"]').count(), 3);
-  await A.getByRole('button', { name: /I’ll Grab It/ }).click();
+  await A.getByRole('button', { name: /Hot & Healthy/ }).click();
   await shot(A, '02-vibes');
 });
 
 await A.getByRole('button', { name: /Keep going/ }).click();
 
-await check('Setup: no dine-in option for Couch Goblins + casual (pickup only)', async () => {
+await check('Setup: no dine-in option for Stay In + Just Us (delivery only)', async () => {
   const t = await text(A);
   assert.ok(!/Dine in/.test(t.split('Budget per person')[0]), 'dine-in should not be offered');
-  assert.match(t, /Pickup/);
+  assert.match(t, /Delivery/);
 });
 
 await check('Back from setup → vibes preserves selection', async () => {

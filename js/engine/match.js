@@ -1,8 +1,8 @@
 // Restaurant eligibility + ranking. Fully deterministic: no AI, no randomness.
 import { CONFIG } from '../config.js';
-import { UPSCALE, foodName } from '../data/foods.js';
+import { UPSCALE, SHAREABLE, FOOD_BY_ID, foodName } from '../data/foods.js';
 import { atmospheres } from '../data/vibes.js';
-import { valueFn, itemValue } from './prefs.js';
+import { valueFn, itemValue, itemAllowed } from './prefs.js';
 
 export const PEOPLE = ['A', 'B'];
 
@@ -98,20 +98,63 @@ function vibeBonus(ctx, r, picks) {
   }
   if (atm.includes('romantic')) b += r.atmosphere.includes('romantic') ? 0.05 : -0.03;
   if (atm.includes('casual')) b += r.atmosphere.includes('casual') ? 0.03 : -0.02;
+  if (atm.includes('quick')) b += r.atmosphere.includes('quick') ? 0.06 : -0.04;
+  if ((ctx.settings.vibes || []).includes('healthy')) b += (picks.filter((p) => FOOD_BY_ID[p.foodId]?.vibes.includes('healthy')).length / 2) * 0.08;
   return b;
+}
+
+const BOTH_WANT = 60; // "yes"/"really" tonight, or a saved Love/Like when skipping
+
+function optionsFor(profile, value, r) {
+  const out = [];
+  for (const item of r.menu) {
+    const v = itemValue(profile, value, item);
+    if (v === -Infinity || v < CONFIG.qualifyThreshold) continue;
+    const foodId = item.foods.reduce((a, f) => (value(f) > value(a) ? f : a), item.foods[0]);
+    out.push({ item, value: v, foodId });
+  }
+  return out;
+}
+
+/**
+ * Pick one dish per person, preferring DIFFERENT dishes when you want similar things
+ * (you said wings + steak, she said steak + wings → wings for one, steak for the other).
+ * Also flags dishes you both wanted and suggests a shareable starter you both wanted.
+ */
+export function pairDishes(r, ctx, values) {
+  const [oa, ob] = PEOPLE.map((p) => optionsFor(ctx.profiles[p], values[p], r));
+  if (!oa.length || !ob.length) return null;
+  let best = null;
+  for (const a of oa) {
+    for (const b of ob) {
+      let s = 0.7 * Math.min(a.value, b.value) + 0.3 * ((a.value + b.value) / 2);
+      if (a.item.id === b.item.id) s -= 22; // same exact dish: only if nothing else is close
+      else if (a.foodId === b.foodId) s -= 12; // two versions of the same thing
+      if (!best || s > best.s + 1e-9) best = { s, a, b };
+    }
+  }
+  const both = (f) => values.A(f) >= BOTH_WANT && values.B(f) >= BOTH_WANT;
+  const picks = [best.a, best.b].map((p) => ({ ...p, bothWanted: p.item.foods.some(both) }));
+  const used = new Set(picks.map((p) => p.item.id));
+  const share = r.menu
+    .filter((item) => !used.has(item.id) && item.verification !== 'unverified'
+      && PEOPLE.every((p) => itemAllowed(ctx.profiles[p], item))
+      && item.foods.some((f) => SHAREABLE.has(f) && both(f)))
+    .sort((x, y) => (y.verification === 'dish') - (x.verification === 'dish') || (x.price ?? 99) - (y.price ?? 99))[0] || null;
+  return { picks, share };
 }
 
 /** Score one restaurant. Returns null if it fails a hard constraint. */
 export function scoreRestaurant(r, ctx, opts = {}) {
   if (placeBlocker(r, ctx)) return null;
   const s = ctx.settings;
-  const picks = PEOPLE.map((p) => {
-    const value = opts.values?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p]);
-    return bestFor(ctx.profiles[p], value, r);
-  });
-  if (picks.some((p) => !p || p.value < CONFIG.qualifyThreshold)) return null;
+  const values = Object.fromEntries(PEOPLE.map((p) => [p, opts.values?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p])]));
+  const bests = PEOPLE.map((p) => bestFor(ctx.profiles[p], values[p], r));
+  if (bests.some((p) => !p || p.value < CONFIG.qualifyThreshold)) return null;
+  // Ranking uses each person's best dish; the dishes we SHOW are paired to differ where possible.
+  const { picks, share } = pairDishes(r, ctx, values);
 
-  const [a, b] = picks.map((p) => p.value);
+  const [a, b] = bests.map((p) => p.value);
   const W = CONFIG.rankWeights;
   const miles = distanceMiles(s.location, r);
   const parts = {
@@ -127,7 +170,7 @@ export function scoreRestaurant(r, ctx, opts = {}) {
   };
   const base = Object.entries(W).reduce((t, [k, w]) => t + w * parts[k], 0);
   const score = base + vibeBonus(ctx, r, picks) + historyBonus(ctx, r.id);
-  return { r, id: r.id, score, parts, picks, miles };
+  return { r, id: r.id, score, parts, picks, share, miles };
 }
 
 export function rankRestaurants(ctx, opts) {

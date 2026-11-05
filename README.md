@@ -18,7 +18,8 @@ A two-person dinner decider. Each person swipes on foods (or taps **idc. You Kno
 
 | Area | Status |
 |---|---|
-| 1–3 compatible vibes; atmosphere kept separate from pickup/delivery | ✅ Built |
+| 1–3 compatible couple-themed vibes (fancy, casual, quick, healthy, pickup, delivery); atmosphere kept separate from pickup/delivery | ✅ Built |
+| Different dish for each of you when you want similar things; “You both wanted this” + shared starters | ✅ Built |
 | No pickup/delivery prompts for dine-in-only vibes | ✅ Built |
 | Session setup: method, budget presets + custom, time, radius, area | ✅ Built |
 | Partner requests settings changes instead of silently overriding them | ✅ Built |

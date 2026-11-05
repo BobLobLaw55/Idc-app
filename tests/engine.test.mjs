@@ -30,7 +30,7 @@ function ctx(over = {}) {
 const swipe = (answers) => ({ mode: 'swipe', answers });
 
 test('Test 1: Never sushi is never dealt to A; sushi restaurants can still qualify via another dish', () => {
-  const c = ctx({ profiles: { A: { prefs: { sushi: 'never', steak: 'love' }, allergies: [] }, B: { prefs: { sushi: 'love' }, allergies: [] } }, settings: { vibes: ['date'] } });
+  const c = ctx({ profiles: { A: { prefs: { sushi: 'never', steak: 'love' }, allergies: [] }, B: { prefs: { sushi: 'love' }, allergies: [] } }, settings: { vibes: ['fancy'] } });
   for (let seed = 1; seed < 60; seed++) {
     const { deck } = buildDeck(c, 'A', { seed });
     assert.ok(!deck.includes('sushi'), `seed ${seed} dealt sushi`);
@@ -83,7 +83,7 @@ test('Test 4: both skip → three restaurants from saved profiles', () => {
   const c = ctx({
     profiles: { A: { prefs: { pizza: 'love', wings: 'like' }, allergies: [] }, B: { prefs: { pasta: 'love', alfredo: 'love', salad: 'like' }, allergies: [] } },
     rounds: { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } },
-    settings: { vibes: ['couch'], method: 'delivery' },
+    settings: { vibes: ['delivery'], method: 'delivery' },
   });
   const f = finalThree(c);
   assert.equal(f.candidates.length, 3);
@@ -114,9 +114,9 @@ test('Allergies: a shellfish allergy keeps shellfish dishes from being that pers
   for (let s = 1; s < 20; s++) assert.ok(!buildDeck(c, 'A', { seed: s }).deck.some((f) => FOOD_BY_ID[f].allergens.includes('shellfish')));
 });
 
-test('Test 8: Fancy AF favors upscale dishes and places; Couch Goblins only takeout-capable places', () => {
+test('Test 8: Dress to Impress favors upscale dishes and places; Stay In only delivery-capable places', () => {
   const fancy = ctx({ settings: { vibes: ['fancy'], method: 'dinein' } });
-  const couch = ctx({ settings: { vibes: ['couch'], method: 'either' } });
+  const couch = ctx({ settings: { vibes: ['delivery'], method: 'delivery' } });
   let up = 0, upC = 0;
   for (let s = 1; s <= 30; s++) {
     up += buildDeck(fancy, 'A', { seed: s }).deck.filter((f) => UPSCALE.has(f)).length;
@@ -127,10 +127,10 @@ test('Test 8: Fancy AF favors upscale dishes and places; Couch Goblins only take
   const p = { A: { prefs: { steak: 'love', salmon: 'like' }, allergies: [] }, B: { prefs: { steak: 'like', risotto: 'love' }, allergies: [] } };
   const topFancy = rankRestaurants({ ...fancy, rounds: r, profiles: p })[0];
   assert.ok(topFancy.r.atmosphere.includes('upscale'), topFancy.r.name);
-  for (const x of rankRestaurants({ ...couch, rounds: r, profiles: p })) assert.ok(x.r.services.pickup || x.r.services.delivery);
+  for (const x of rankRestaurants({ ...couch, rounds: r, profiles: p })) assert.ok(x.r.services.delivery);
   // travel-friendly foods dominate couch decks
   let travel = 0, total = 0;
-  for (let s = 1; s <= 30; s++) { const d = buildDeck(couch, 'A', { seed: s }).deck; total += d.length; travel += d.filter((f) => FOOD_BY_ID[f].vibes.includes('couch')).length; }
+  for (let s = 1; s <= 30; s++) { const d = buildDeck(couch, 'A', { seed: s }).deck; total += d.length; travel += d.filter((f) => ['couch', 'deliver'].some((t) => FOOD_BY_ID[f].vibes.includes(t))).length; }
   assert.ok(travel / total > 0.6, `couch-friendly ratio ${travel / total}`);
 });
 
@@ -210,13 +210,61 @@ test('Unverified menu items never qualify', () => {
 });
 
 test('Vibes: contradictory combos blocked, compatible ones allowed', () => {
-  assert.equal(canAddVibe(['fancy'], 'date').ok, true);
-  assert.equal(canAddVibe(['fancy'], 'couch').ok, false);
-  assert.equal(canAddVibe(['grab'], 'deliver').ok, false);
-  assert.deepEqual(allowedMethods(['couch']), ['pickup', 'delivery']);
-  assert.ok(!methodChoices(['couch']).includes('dinein'));
-  assert.deepEqual(methodChoices(['date', 'fancy']), ['dinein']);
-  assert.equal(canAddVibe(['date', 'fancy', 'casual'], 'casual').ok, true);
+  assert.equal(canAddVibe(['fancy'], 'healthy').ok, true);
+  assert.equal(canAddVibe(['fancy'], 'delivery').ok, false);
+  assert.equal(canAddVibe(['fancy'], 'quick').ok, false);
+  assert.equal(canAddVibe(['pickup'], 'delivery').ok, false);
+  assert.deepEqual(allowedMethods(['delivery']), ['delivery']);
+  assert.ok(!methodChoices(['casual', 'delivery']).includes('dinein'));
+  assert.deepEqual(methodChoices(['fancy', 'casual']), ['dinein']);
+  assert.equal(canAddVibe(['casual', 'healthy', 'quick'], 'fancy').ok, false);
+});
+
+test('Pairing: similar cravings → different dishes, flagged as both wanted', () => {
+  const c = ctx({ rounds: { A: swipe({ wings: 'yes', steak: 'yes' }), B: swipe({ steak: 'yes', wings: 'yes' }) } });
+  const grill = scoreRestaurant(RESTAURANTS.find((r) => r.id === 'r01'), c); // Corner Grill: wings + sirloin
+  assert.ok(grill);
+  const [a, b] = grill.picks;
+  assert.notEqual(a.item.id, b.item.id, 'should not give you both the same dish');
+  assert.deepEqual(new Set([a.foodId, b.foodId]), new Set(['wings', 'steak']));
+  assert.ok(a.bothWanted && b.bothWanted);
+  // across the whole shortlist, nobody gets an identical dish when alternatives exist
+  // wherever the menu has both a steak and a wings dish, you each get a different one
+  for (const x of rankRestaurants(c)) {
+    const has = (f) => x.r.menu.some((m) => m.verification !== 'unverified' && m.foods.includes(f));
+    if (has('wings') && has('steak')) assert.notEqual(x.picks[0].item.id, x.picks[1].item.id, x.r.name);
+  }
+});
+
+test('Pairing: same dish only when nothing else works', () => {
+  const only = (id) => Object.fromEntries(FOODS.map((f) => [f.id, f.id === id ? 'love' : 'dislike']));
+  const c = ctx({ profiles: { A: { prefs: only('ribeye'), allergies: [] }, B: { prefs: only('ribeye'), allergies: [] } }, rounds: { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } }, settings: { vibes: ['fancy'] } });
+  const top = rankRestaurants(c)[0];
+  assert.equal(top.picks[0].foodId, 'ribeye');
+  assert.equal(top.picks[1].foodId, 'ribeye');
+});
+
+test('Pairing: a shareable starter you both wanted is suggested to split', () => {
+  const c = ctx({ rounds: { A: swipe({ steak: 'really', loadedfries: 'yes' }), B: swipe({ burger: 'really', loadedfries: 'yes' }) } });
+  const grill = scoreRestaurant(RESTAURANTS.find((r) => r.id === 'r01'), c);
+  assert.ok(grill.share, 'should suggest splitting loaded fries');
+  assert.ok(grill.share.foods.includes('loadedfries'));
+  assert.ok(!grill.picks.some((p) => p.item.id === grill.share.id));
+});
+
+test('Quick and Healthy vibes steer cards and places', () => {
+  const quick = ctx({ settings: { vibes: ['quick'], method: 'pickup' } });
+  const r = { A: { mode: 'skip', answers: {} }, B: { mode: 'skip', answers: {} } };
+  const p = { A: { prefs: { burger: 'love', tacos: 'like', pizza: 'like' }, allergies: [] }, B: { prefs: { wings: 'love', burrito: 'like', sandwich: 'like' }, allergies: [] } };
+  const top = rankRestaurants({ ...quick, rounds: r, profiles: p }).slice(0, 3);
+  assert.ok(top.filter((x) => x.r.atmosphere.includes('quick')).length >= 2, top.map((x) => x.r.name).join());
+  const healthy = ctx({ settings: { vibes: ['healthy'], method: 'dinein' } });
+  let h = 0, base = 0;
+  for (let s = 1; s <= 30; s++) {
+    h += buildDeck(healthy, 'A', { seed: s }).deck.filter((f) => FOOD_BY_ID[f].vibes.includes('healthy')).length;
+    base += buildDeck(ctx(), 'A', { seed: s }).deck.filter((f) => FOOD_BY_ID[f].vibes.includes('healthy')).length;
+  }
+  assert.ok(h > base * 1.3, `healthy ${h} vs casual ${base}`);
 });
 
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {

@@ -4,6 +4,7 @@ import { FOODS, FOOD_BY_ID, UPSCALE } from '../data/foods.js';
 import { foodAllowed, prefOf, cravings, valueFn, itemAllowed } from './prefs.js';
 import { placeBlocker, bestFor } from './match.js';
 import { rng, shuffle, weightedSample } from './rng.js';
+import { vibeFoodTags } from '../data/vibes.js';
 
 const PREF_W = { love: 5, like: 3, neutral: 0.6, dislike: 0, never: 0 };
 const PREF_MULT = { love: 1.5, like: 1.2, neutral: 1, dislike: 0.15, never: 0 };
@@ -53,7 +54,7 @@ export function partnerFoods(ctx, partner, me) {
 }
 
 function vibeAffinity(food, vibes) {
-  let a = vibes.filter((v) => food.vibes.includes(v)).length;
+  let a = vibeFoodTags(vibes).filter((tags) => tags.some((t) => food.vibes.includes(t))).length;
   if (a && vibes.includes('fancy') && UPSCALE.has(food.id)) a += 1.5;
   return a;
 }

@@ -26,7 +26,7 @@ const R = [
     menu: [['12 oz Ribeye', 'ribeye steak', 42, 'd'], ['Petite Filet', 'filet steak', 46, 'd'], ['Smash Burger', 'burger', 18, 'd'], ['Mushroom Risotto', 'risotto', 26, 'd', 1], ['Seared Scallops', 'scallops', 38, 'd'], ['Lamb Chops', 'lamb', 41, 'd'], ['Chef’s Board', 'charcuterie', 22, 'd']],
   },
   {
-    id: 'r03', name: 'The Saucy Chicken', cuisine: 'Chicken joint', atmosphere: ['casual'], price: 14,
+    id: 'r03', name: 'The Saucy Chicken', cuisine: 'Chicken joint', atmosphere: ['quick', 'casual'], price: 14,
     lat: 29.802, lng: -82.512, svc: 'dinein pickup delivery', deliveryRadius: 10, hours: [10.5, 23],
     menu: [['Garlic Parm Wings', 'wings', 13, 'd'], ['Boneless Hot Honey Bites', 'wingsboneless', 12, 'd'], ['Nashville Hot Sandwich', 'chickensandwich sandwich', 11, 'd'], ['Tender Combo', 'tenders', 11, 'd'], ['Buffalo Wrap', 'wrap', 10, 'd'], ['Crispy Chicken Salad', 'salad', 12, 'd'], ['Southern Mac', 'macncheese', 6, 'd', 1]],
   },
@@ -36,7 +36,7 @@ const R = [
     menu: [['Margherita Pizza', 'pizza', 16, 'd', 1], ['Chicken Parmigiana', 'chickenparm', 21, 'd'], ['Fettuccine Alfredo', 'alfredo', 18, 'd', 1], ['Spaghetti & Meatballs', 'spaghetti', 17, 'd'], ['Baked Lasagna', 'lasagna', 19, 'd'], ['Cheese Ravioli', 'ravioli', 18, 'd', 1], ['Shrimp Scampi Linguine', 'seafoodpasta shrimp', 24, 'd'], ['Steak Tips', 'steak', 26, 'c']],
   },
   {
-    id: 'r05', name: 'Taco After Dark', cuisine: 'Mexican', atmosphere: ['casual'], price: 15,
+    id: 'r05', name: 'Taco After Dark', cuisine: 'Mexican', atmosphere: ['quick', 'casual'], price: 15,
     lat: 29.795, lng: -82.483, svc: 'dinein pickup delivery', deliveryRadius: 8, hours: [11, 25],
     menu: [['Carne Asada Tacos', 'tacos', 13, 'd'], ['Birria Tacos + Consomé', 'birria tacos', 15, 'd'], ['Baja Fish Tacos', 'fishtacos tacos', 14, 'd'], ['California Burrito', 'burrito', 13, 'd'], ['Veggie Burrito Bowl', 'burritobowl', 12, 'd', 1], ['Chicken Quesadilla', 'quesadilla', 11, 'd'], ['Loaded Nachos', 'nachos', 12, 'd', 1], ['Tex-Mex Burger', 'burger', 13, 'd']],
   },
@@ -56,7 +56,7 @@ const R = [
     menu: [['Steak Frites', 'steak', 34, 'd'], ['Truffle Burger', 'burger', 22, 'd'], ['Pappardelle Bolognese', 'upscalepasta', 27, 'd'], ['Pan-Roasted Salmon', 'salmon', 31, 'd'], ['Seasonal Risotto', 'risotto', 26, 'd', 1], ['Harvest Salad', 'salad', 14, 'd', 1], ['Charcuterie', 'charcuterie', 19, 'd']],
   },
   {
-    id: 'r09', name: 'The Weekend Slice', cuisine: 'Pizzeria', atmosphere: ['casual'], price: 14,
+    id: 'r09', name: 'The Weekend Slice', cuisine: 'Pizzeria', atmosphere: ['quick', 'casual'], price: 14,
     lat: 29.786, lng: -82.505, svc: 'dinein pickup delivery', deliveryRadius: 9, hours: [11, 24],
     menu: [['Pepperoni Pizza', 'pizza', 15, 'd'], ['Veggie Supreme', 'pizza', 16, 'd', 1], ['Italian Grinder', 'sandwich', 11, 'd'], ['Crispy Wings', 'wings', 13, 'd'], ['Garlic Knot Calzone', 'calzone', 12, 'd', 1], ['Greek Salad', 'salad', 10, 'd', 1]],
   },
@@ -81,7 +81,7 @@ const R = [
     menu: [['Spicy Tuna Roll', 'sushi', 9, 'd'], ['Omakase Sashimi', 'premiumsushi sushi', 38, 'd'], ['Avocado Cucumber Roll', 'sushi', 7, 'd', 1], ['Hibachi Steak', 'hibachi steak', 27, 'd'], ['Hibachi Shrimp', 'hibachi shrimp', 25, 'd'], ['Chicken Teriyaki', 'teriyaki', 19, 'd'], ['Vegetable Fried Rice', 'friedrice', 10, 'd', 1], ['Gyoza', 'dumplings', 8, 'd']],
   },
   {
-    id: 'r14', name: 'Olive & Oregano', cuisine: 'Mediterranean', atmosphere: ['casual'], price: 16,
+    id: 'r14', name: 'Olive & Oregano', cuisine: 'Mediterranean', atmosphere: ['quick', 'casual'], price: 16,
     lat: 29.69, lng: -82.41, svc: 'dinein pickup delivery', deliveryRadius: 7, hours: [11, 21],
     menu: [['Chicken Shawarma Bowl', 'medbowl', 14, 'd'], ['Lamb Gyro', 'gyro', 12, 'd'], ['Falafel Wrap', 'falafel wrap', 11, 'd', 1], ['Chicken Kebab Plate', 'kebab', 17, 'd'], ['Mezze Bowl', 'medbowl grainbowl', 13, 'd', 1], ['Fattoush Salad', 'salad', 10, 'd', 1]],
   },
@@ -91,12 +91,12 @@ const R = [
     menu: [['Double Smash Cheeseburger', 'cheeseburger burger', 15, 'd'], ['Wings by the Dozen', 'wings', 16, 'd'], ['Philly Cheesesteak', 'philly sandwich', 14, 'd'], ['Fish & Chips', 'friedfish', 16, 'd'], ['10 oz NY Strip', 'steak', 27, 'd'], ['Beer Cheese Fries', 'loadedfries', 10, 'd', 1], ['Nachos', 'nachos', null, 'c']],
   },
   {
-    id: 'r16', name: 'Golden Wok Express', cuisine: 'Chinese takeout', atmosphere: ['casual'], price: 13,
+    id: 'r16', name: 'Golden Wok Express', cuisine: 'Chinese takeout', atmosphere: ['quick', 'casual'], price: 13,
     lat: 29.78, lng: -82.488, svc: 'pickup delivery', deliveryRadius: 8, hours: [11, 22.5],
     menu: [['General Tso’s Chicken', 'generaltso', 13, 'd'], ['Beef Lo Mein', 'lomein', 12, 'd'], ['House Fried Rice', 'friedrice', 11, 'd'], ['Steamed Dumplings', 'dumplings', 8, 'd'], ['Vegetable Stir-Fry', 'stirfry', 11, 'd', 1], ['Shrimp with Garlic Sauce', 'shrimp stirfry', 14, 'd'], ['Chicken Wings', 'wings', 10, 'd']],
   },
   {
-    id: 'r17', name: 'Bowl & Bloom', cuisine: 'Fast-casual bowls', atmosphere: ['casual'], price: 15,
+    id: 'r17', name: 'Bowl & Bloom', cuisine: 'Fast-casual bowls', atmosphere: ['quick', 'casual'], price: 15,
     lat: 29.661, lng: -82.35, svc: 'dinein pickup delivery', deliveryRadius: 6, hours: [10.5, 21],
     menu: [['Salmon Poke Bowl', 'poke', 16, 'd'], ['Tofu Grain Bowl', 'grainbowl', 13, 'd', 1], ['Chicken Burrito Bowl', 'burritobowl', 13, 'd'], ['Thai Curry Bowl', 'curry', 14, 'd', 1], ['Cobb Salad', 'salad', 13, 'd']],
   },
@@ -126,12 +126,12 @@ const R = [
     menu: [['Sizzling Steak Fajitas', 'fajitas steak', 24, 'd'], ['Shrimp Fajitas', 'fajitas shrimp', 25, 'd'], ['Enchiladas Verdes', 'enchiladas', 16, 'd', 1], ['Street Tacos', 'tacos', 14, 'd'], ['Grilled Fish Tacos', 'fishtacos', 16, 'd'], ['Queso & Chips', 'nachos', 9, 'd', 1]],
   },
   {
-    id: 'r23', name: 'Pho Real', cuisine: 'Vietnamese', atmosphere: ['casual'], price: 15,
+    id: 'r23', name: 'Pho Real', cuisine: 'Vietnamese', atmosphere: ['quick', 'casual'], price: 15,
     lat: 29.665, lng: -82.336, svc: 'dinein pickup delivery', deliveryRadius: 5, hours: [11, 21.5],
     menu: [['Beef Pho', 'pho', 14, 'd'], ['Lemongrass Chicken Vermicelli', 'stirfry', 14, 'd'], ['Banh Mi', 'sandwich', 10, 'd'], ['Tofu Spring Rolls', 'dumplings', 7, 'd', 1], ['Shrimp Fried Rice', 'friedrice shrimp', 14, 'd']],
   },
   {
-    id: 'r24', name: 'Santa Fe Sub Co.', cuisine: 'Sandwich shop', atmosphere: ['casual'], price: 12,
+    id: 'r24', name: 'Santa Fe Sub Co.', cuisine: 'Sandwich shop', atmosphere: ['quick', 'casual'], price: 12,
     lat: 29.799, lng: -82.474, svc: 'pickup delivery', deliveryRadius: 10, hours: [10, 21],
     menu: [['Italian Sub', 'sandwich', 11, 'd'], ['Philly Steak Sub', 'philly sandwich', 12, 'd'], ['Turkey Club Wrap', 'wrap', 10, 'd'], ['Veggie Hummus Wrap', 'wrap falafel', 10, 'd', 1], ['Chicken Bacon Ranch', 'sandwich', 11, 'd'], ['Soup of the Day', 'soup', null, 'c']],
   },

@@ -6,6 +6,8 @@
 // with dev tools could read it. The UI never renders a partner's answers or votes; real enforcement
 // requires the backend row-level security in supabase/schema.sql.
 
+import { normalizeVibes } from './data/vibes.js';
+
 const KEY = 'idc.v2.state';
 const SEAT = 'idc.v2.seat';
 const listeners = new Set();
@@ -40,7 +42,11 @@ export function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s?.version === 2) return s;
+      if (s?.version === 2) {
+        if (s.session?.settings) s.session.settings.vibes = normalizeVibes(s.session.settings.vibes);
+        if (s.session && !s.session.settings.vibes.length) s.session = null;
+        return s;
+      }
     }
   } catch { /* fall through */ }
   return memory ? structuredClone(memory) : freshState();

@@ -297,7 +297,14 @@ function venueFacts(r, scored) {
 
 function pairHtml(scored) {
   if (!scored) return '<p class="small muted">This place no longer meets tonight’s rules.</p>';
-  return `<div class="pair">${scored.picks.map((p, i) => `<div><b>For ${nameOf(i ? 'B' : 'A')}</b>${esc(pickLabel(p))}</div>`).join('')}</div>`;
+  const sh = scored.share;
+  const [a, b] = scored.picks;
+  if (a.item.id === b.item.id) {
+    return `<div class="pair one"><div><b>For both of you</b>${esc(pickLabel(a))}<span class="both">${a.bothWanted ? '♥ You both wanted this — the only match you share here' : 'The one dish here that works for both of you'}</span></div></div>
+  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both agreed on this one</span></div>` : ''}`;
+  }
+  return `<div class="pair">${scored.picks.map((p, i) => `<div><b>For ${nameOf(i ? 'B' : 'A')}</b>${esc(pickLabel(p))}${p.bothWanted ? '<span class="both">♥ You both wanted this</span>' : ''}</div>`).join('')}</div>
+  ${sh ? `<div class="share"><b>Split this</b>${esc(sh.name || foodName(sh.foods[0]))} <span class="both">♥ You both agreed on this one</span></div>` : ''}`;
 }
 
 const scoreOf = (rid) => scoreRestaurant(RESTAURANT_BY_ID[rid], { ...ctxOf(state), sessionRejected: [] });
@@ -385,7 +392,7 @@ screens.result = () => {
     <div style="margin-top:10px">${btn('Offer a Replacement', 'repl-request', { cls: 'wide secondary' })}</div><p class="hint">Both of you have to approve. Tonight’s vetoes stay vetoed. A “closed” or “busy” report only applies to tonight.</p>`;
   return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${pairHtml(sc)}</div>
   ${res.sameVote ? `<div class="notice">You both vetoed the same place. A shocking development in the ‘I don’t care’ household.</div>` : ''}
-  <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}</ul>${votes}</div>
+  <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}${sc && (sc.share || sc.picks.some((p) => p.bothWanted)) ? '<li>You two actually agreed on something. Mark the calendar.</li>' : ''}</ul>${votes}</div>
   ${b ? `<div class="panel"><div class="eyebrow">Backup</div><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.cuisine)} · ~$${b.price}/person</p></div>` : '<div class="panel small muted">No backup available under tonight’s rules.</div>'}
   ${res.noReplacement ? `<div class="notice warn">No eligible replacement left nearby. ${btn('Widen the search', 'widen', { cls: 'small' })}</div>` : ''}
   <div class="panel"><h2>Plans changed?</h2>${repl}</div>
