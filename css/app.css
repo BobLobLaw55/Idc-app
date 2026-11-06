@@ -162,6 +162,9 @@ input[type='text'], input[type='number'], input[type='time'], select {
 .pair > div { background: var(--bg2); border-radius: 12px; padding: 10px; font-size: 14px; }
 .pair b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
 .both { display: block; margin-top: 4px; font-size: 12px; font-weight: 800; color: var(--pink); }
+.issues { font-size: 13px; color: #ffd28a; margin: 6px 0 0; }
+.notice.bonus { background: #2c1f2a; border-color: #6a3d52; color: #ffd6e6; }
+a.btn.maps { display: block; text-align: center; text-decoration: none; margin-top: 14px; line-height: 22px; }
 .fits { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
 .fits b { color: var(--pink); }
 .pill.plan { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

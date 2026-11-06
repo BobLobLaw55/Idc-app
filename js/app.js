@@ -4,7 +4,7 @@ import { other, ctxOf } from './session.js';
 import { VIBES, METHOD_LABEL, vibeNames } from './data/vibes.js';
 import { FOODS, FOOD_BY_ID, GROUPS, ALLERGENS, photoUrl, foodName } from './data/foods.js';
 import { RESTAURANTS, RESTAURANT_BY_ID } from './data/restaurants.js';
-import { scoreRestaurant, pickLabel, distanceMiles, DRINKS, personalMatches, appetizerOptions, drinkMatch } from './engine/match.js';
+import { scoreRestaurant, pickLabel, distanceMiles, DRINKS, personalMatches, appetizerOptions, drinkMatch, stretchIssues } from './engine/match.js';
 import { LEVELS, prefOf } from './engine/prefs.js';
 
 const app = document.getElementById('app');
@@ -251,13 +251,15 @@ screens.swipe = () => {
       : `<p class="muted">${nameOf(ses().startedBy)} set the rules. Ask them to change the time or budget.</p>${btn('Request a change', 'go', { arg: 'setup', cls: 'wide secondary' })}`}</div>`;
   }
   if (done) {
-    return `${head}<div class="panel done-card"><div class="big-emoji" aria-hidden="true">✓</div><h2>Cravings locked in. Your work here is done.</h2>
+    return `${head}<div class="panel done-card"><div class="big-emoji" aria-hidden="true">✓</div><h2>${r.deck.length && r.deck.every((d) => r.answers[d] === 'no') ? 'Nah to everything — even your favorites. Bold.' : 'Cravings locked in. Your work here is done.'}</h2>${r.deck.length && r.deck.every((d) => r.answers[d] === 'no') ? '<p class="muted">No worries: we’ll lean on your saved profile, and we’ll still find somewhere.</p>' : ''}
       <p class="muted">Want to double-check? Review or undo before you submit.</p>
       ${btn('Submit my cravings →', 'submit', { cls: 'wide big' })}</div>${tools}`;
   }
   const id = r.deck[r.pos];
   const nextId = r.deck.slice(r.pos + 1).find((x) => !r.answers[x]);
+  const bonus = r.buckets?.[id] === 'bonus';
   return `${head}
+  ${bonus ? `<div class="notice bonus" role="status">Tough crowd. Here are a few of your favorites you haven’t turned down — what are you feeling most?</div>` : ''}
   <div class="deck" id="deck">${nextId ? cardHtml(nextId, false) : ''}${cardHtml(id, true)}</div>
   <div class="answers" role="group" aria-label="Answer">
     <button type="button" class="btn ans-no" data-act="answer" data-arg="no">Nah</button>
@@ -391,9 +393,42 @@ screens.final = () => {
   else action = `<p class="small muted" style="text-align:center">One move each: <b>eliminate</b> one place <i>or</i> say you <b>really want</b> one. Not both.</p>`;
   return `${title('Results', 'The Final Three', 'Three restaurants. One move each. One dinner.')}
     ${!myVote && !s.result ? action : ''}
-    ${(() => { const fb = c.filter((id) => s.fallback?.includes(id)).length; const n = c.length - fb; return fb ? `<div class="notice">Tonight’s cravings only found ${n || 'zero'} match${n === 1 ? '' : 'es'}, so we filled in from your saved favorites.</div>` : ''; })()}
+    ${s.relaxed?.length
+      ? `<div class="notice warn">Nothing matched everything tonight, so we stretched: two picks from your favorite foods${s.saved ? ' and one of your saved restaurants' : ''}. Each one says which rule it bends.</div>`
+      : (() => { const fb = c.filter((id) => s.fallback?.includes(id)).length; const n = c.length - fb; return fb ? `<div class="notice">Tonight’s cravings only found ${n || 'zero'} match${n === 1 ? '' : 'es'}, so we filled in from your saved favorites.</div>` : ''; })()}
     ${c.map((id) => venueCard(id, !myVote && !s.result)).join('')}
     ${myVote || s.result ? action : ''}`;
+}
+
+function tileTag(id, sc) {
+  const s = ses();
+  if (s.saved === id) return 'Your saved spot';
+  if (s.relaxed?.includes(id)) return 'Stretch pick';
+  return sc?.fromFavorites ? 'From your favorites' : 'Demo';
+}
+
+/** Stretch picks say plainly which of tonight's rules they bend. */
+function issuesHtml(id) {
+  if (!ses().relaxed?.includes(id)) return '';
+  const list = stretchIssues(RESTAURANT_BY_ID[id], ctxOf(state));
+  return list.length ? `<p class="issues">⚠︎ ${list.map(esc).join(' · ')}</p>` : '';
+}
+
+/** Open the place in Apple Maps on Apple devices, Google Maps elsewhere. */
+function mapsUrl(r) {
+  const q = encodeURIComponent(r.name);
+  const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+  return apple ? `https://maps.apple.com/?q=${q}&ll=${r.lat},${r.lng}` : `https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`;
+}
+
+/** Final screen: what each of you picked that this place has. */
+function picksPanel(rid) {
+  const c = { ...ctxOf(state), sessionRejected: [] };
+  const col = (p) => {
+    const list = personalMatches(RESTAURANT_BY_ID[rid], c, p);
+    return `<div><b>${nameOf(p)}</b>${list.length ? `<ul class="plain">${list.map((o) => `<li>${esc(pickLabel(o))}</li>`).join('')}</ul>` : '<span class="small muted">Something you can live with</span>'}</div>`;
+  };
+  return `<div class="panel"><h2>What you picked that they have</h2><div class="pair">${col('A')}${col('B')}</div></div>`;
 }
 
 /** One Final Three tile. Voting + confirming happens right here — no scrolling. */
@@ -418,7 +453,7 @@ function venueCard(id, canVote) {
       ? btn('Eliminate', 'vote', { arg: `veto:${id}`, cls: 'small danger', aria: `Eliminate ${r.name}` }) + btn('Really want this!', 'vote', { arg: `want:${id}`, cls: 'small want', aria: `Really want ${r.name}` })
       : ''}</div>`;
   }
-  return `<article class="venue ${cls}" id="venue-${id}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">${sc?.fromFavorites ? 'From your favorites' : 'Demo'}</span></div>
+  return `<article class="venue ${cls}" id="venue-${id}"><div class="row spread"><h3>${esc(r.name)}</h3><span class="pill">${tileTag(id, sc)}</span></div>${issuesHtml(id)}
     ${venueFacts(r, sc)}${fitsPrivate(sc)}${mineHtml(id, sc)}${drinksPrivate(sc)}
     ${actions}</article>`;
 }
@@ -463,10 +498,13 @@ screens.result = () => {
   else if (rq) repl = `<div class="notice warn" role="alert"><b>${nameOf(rq.from)} wants a replacement</b> (${esc({ busy: 'too busy', closed: 'it’s closed', changed: 'changed our minds', other: 'other' }[rq.reason])}).<div class="row" style="margin-top:8px">${btn('Approve', 'repl-answer', { arg: 'yes', cls: 'small' })}${btn('No, we’re going', 'repl-answer', { arg: 'no', cls: 'small secondary' })}</div></div>`;
   else repl = `<label class="field" for="why">Why?</label><select id="why" data-change="reason">${[['busy', 'Too busy'], ['closed', 'It’s closed'], ['changed', 'Changed our minds'], ['other', 'Other']].map(([k, l]) => `<option value="${k}" ${ui.reason === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div style="margin-top:10px">${btn('Offer a Replacement', 'repl-request', { cls: 'wide secondary' })}</div><p class="hint">Both of you have to approve. Tonight’s vetoes stay vetoed. A “closed” or “busy” report only applies to tonight.</p>`;
-  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${fitsHtml(sc)}${pairHtml(sc, { share: false })}</div>
+  return `<div class="panel winner"><div class="eyebrow">${verb}</div><h1 tabindex="-1">${esc(r.name)}</h1>${venueFacts(r, sc)}${issuesHtml(res.winner)}${fitsHtml(sc)}
+    <a class="btn wide maps" href="${mapsUrl(r)}" target="_blank" rel="noopener">📍 Open in Maps</a>
+    <p class="hint" style="text-align:center">Demo restaurant — this opens its pretend location.</p></div>
+  ${picksPanel(res.winner)}
   ${extrasHtml(r, sc)}
   ${res.sameVote ? `<div class="notice">You both vetoed the same place. A shocking development in the ‘I don’t care’ household.</div>` : ''}
-  <div class="panel"><h2>Why this one</h2><ul class="why">${res.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}${sc ? `<li>${esc(pickLabel(sc.picks[0]))} for ${nameOf('A')}; ${esc(pickLabel(sc.picks[1]))} for ${nameOf('B')}</li>` : ''}${sc && (sc.share || sc.picks.some((p) => p.bothWanted)) ? '<li>You two actually agreed on something. Mark the calendar.</li>' : ''}</ul>${votes}</div>
+  ${votes ? `<div class="panel small">${votes}</div>` : ''}
   ${b ? `<div class="panel"><div class="eyebrow">Backup</div><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.cuisine)} · ~$${b.price}/person</p></div>` : '<div class="panel small muted">No backup available under tonight’s rules.</div>'}
   ${res.noReplacement ? `<div class="notice warn">No eligible replacement left nearby. ${btn('Widen the search', 'widen', { cls: 'small' })}</div>` : ''}
   <div class="panel"><h2>Plans changed?</h2>${repl}</div>

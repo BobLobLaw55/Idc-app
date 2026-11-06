@@ -36,6 +36,14 @@ A restaurant qualifies only with a **plan**: one method (dine-in / pickup / deli
 - **Tonight tier:** if you swiped, a place qualifies only through something you answered Maybe, Hell Yes or Really Want. If you skipped, your saved profile *is* tonight.
 - **Favorites tier:** if tonight finds fewer than three places, the remaining slots are filled from both saved profiles (Love/Like). Styles, blocks, allergies, budget and hours still apply, and tonight's "Nah"s still veto. Those tiles say “From your favorites”. Only if both tiers together find fewer than three do we show “Slim pickings”.
 
+### Never a dead end
+- **Stretch tier:** if tonight *and* favorites find nothing at all, you still get three options. Two come from both saved favorite-food profiles with **time, budget and styles loosened and the radius doubled**. The third is one of your **saved restaurants** (profile Favorites), or the next stretch pick if you have none saved. Blocks, allergies, vegetarian, Never and tonight's “Nah”s never bend. Each tile says which rule it bends (“Closed at your time — open 11am”, “Over budget”, “Doesn’t fit what you’re up for”, “Outside your radius”).
+- **Never an empty deck:** if nothing nearby is open or fits right now, cards are dealt from nearby places with the same rules loosened.
+- **Nah to everything:** finishing a deck with only “Nah”s deals up to **5 more cards** from your saved favorites (Love, then Like) that you haven't turned down, topped up with nearby foods you haven't seen. This repeats while there's anything left.
+
+## Final screen
+Winner, plan, **📍 Open in Maps** (Apple Maps on Apple devices, Google Maps elsewhere; demo places open their pretend coordinates), **What you picked that they have** for each of you, “While you’re there” (appetizers you'll both like and drinks, only if they have them), backup, replacement and feedback. There's no “Why this one” list.
+
 ## Decisions (`js/engine/decide.js`)
 Each person makes **one** private move on The Final Three: **Eliminate** one place *or* **Really want this!** on one place. Never both, and the confirm happens on the tile itself.
 - **Vetoes always win:** nobody gets sent somewhere they eliminated, even if the other person really wanted it.

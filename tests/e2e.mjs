@@ -215,7 +215,9 @@ await check('Votes private + Test 9: different vetoes → third wins', async () 
   const s = await state(A);
   assert.equal(s.history.decisions.length, 1, 'decision recorded exactly once');
   const rt = await text(A);
-  assert.match(rt, /For You/i);
+  assert.match(rt, /What you picked that they have/i);
+  assert.ok(!/Why this one/i.test(rt));
+  assert.match(await A.locator('a.maps').getAttribute('href'), /maps\.apple\.com|google\.com\/maps/);
   assert.ok(!/No starters|No alcohol/i.test(rt), 'missing extras are simply not mentioned');
   await shot(A, '08-result');
 });

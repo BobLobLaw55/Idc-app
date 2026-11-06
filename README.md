@@ -33,6 +33,9 @@ A two-person dinner decider. Each person swipes on foods (or taps **idc. You Kno
 | Matching: hard constraints, 60/15/10/10/5 ranking, weaker match counts most | ✅ Built |
 | The Final Three: one private move each (Eliminate *or* Really want this!), confirmed on the tile; deterministic tiebreak; backup | ✅ Built |
 | Favorites fallback when tonight's cravings find fewer than three places | ✅ Built |
+| Never a dead end: stretch picks (rules loosened, clearly labeled) + a saved restaurant when nothing matches; never an empty deck | ✅ Built |
+| Nah to everything → 5 bonus cards from your favorites | ✅ Built |
+| Final screen: what you each picked that they have + Open in Maps | ✅ Built |
 | Replacement (both approve, never repeats tonight's rejects) | ✅ Built |
 | Visit feedback and history-aware ranking | ✅ Built (basic) |
 | Sync between two tabs on one device | ✅ Built (localStorage) |

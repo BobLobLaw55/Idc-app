@@ -32,13 +32,16 @@ export function openAt(r, hour, method) {
   return h >= open && h <= close - buffer;
 }
 
+/** Stretch tier: some rules are loosened for this restaurant (see stretchThree). */
+const relaxed = (ctx, rid) => !!ctx.relax || (ctx.relaxedIds || []).includes(rid);
+
 /** Can we eat at `r` via `method` tonight (service, delivery range, hours, bar if drinking)? */
 function methodOk(r, method, ctx) {
   const s = ctx.settings;
   if (method === 'dinein' && !r.services.dinein) return false;
   if (method === 'pickup' && !r.services.pickup) return false;
   if (method === 'delivery' && !(r.services.delivery && distanceMiles(s.deliveryAddress || s.location, r) <= r.deliveryRadius)) return false;
-  if (!openAt(r, mealHour(s.time, ctx.now), method)) return false;
+  if (!relaxed(ctx, r.id) && !openAt(r, mealHour(s.time, ctx.now), method)) return false;
   if (method === 'dinein' && s.drinks && !r.bar?.length) return false; // "With lube" → sit-down places need a bar
   return true;
 }
@@ -59,7 +62,7 @@ export function planFor(r, ctx, people = PEOPLE) {
       const picks = ctx.vibes?.[p] || [];
       if (!picks.length) { fits[p] = []; continue; }
       fits[p] = picks.filter((id) => styleFits(r, id, method, FOOD_BY_ID));
-      if (!fits[p].length) { ok = false; break; }
+      if (!fits[p].length && !relaxed(ctx, r.id)) { ok = false; break; }
       score += fits[p].length;
     }
     if (!ok) continue;
@@ -105,8 +108,9 @@ export function placeCheck(r, ctx, people = PEOPLE) {
   const s = ctx.settings;
   if (excludedFor(ctx, r.id)) return { blocked: 'permanently excluded' };
   if ((ctx.sessionRejected || []).includes(r.id)) return { blocked: 'already rejected tonight' };
-  if (distanceMiles(s.location, r) > s.radius) return { blocked: 'outside search radius' };
-  if (s.budget && r.price > s.budget * CONFIG.budgetSlack) return { blocked: 'over budget' };
+  const relax = relaxed(ctx, r.id);
+  if (distanceMiles(s.location, r) > s.radius * (relax ? 2 : 1)) return { blocked: 'outside search radius' };
+  if (!relax && s.budget && r.price > s.budget * CONFIG.budgetSlack) return { blocked: 'over budget' };
   const plan = planFor(r, ctx, people);
   if (!plan) return { blocked: 'no plan fits both of your styles (or it’s closed)' };
   return { plan };
@@ -151,11 +155,11 @@ function vibeBonus(ctx, r, picks, plan) {
 
 const BOTH_WANT = 60; // "yes"/"really" tonight, or a saved Love/Like when skipping
 
-function optionsFor(profile, value, r) {
+function optionsFor(profile, value, r, threshold = CONFIG.qualifyThreshold) {
   const out = [];
   for (const item of r.menu) {
     const v = itemValue(profile, value, item);
-    if (v === -Infinity || v < CONFIG.qualifyThreshold) continue;
+    if (v === -Infinity || v < threshold) continue;
     const foodId = item.foods.reduce((a, f) => (value(f) > value(a) ? f : a), item.foods[0]);
     out.push({ item, value: v, foodId });
   }
@@ -168,8 +172,8 @@ function optionsFor(profile, value, r) {
  * Also flags dishes you both wanted, and suggests a shareable starter both saved profiles like.
  * The starter is display-only: it never affects which restaurant ranks higher.
  */
-export function pairDishes(r, ctx, values) {
-  const [oa, ob] = PEOPLE.map((p) => optionsFor(ctx.profiles[p], values[p], r));
+export function pairDishes(r, ctx, values, threshold) {
+  const [oa, ob] = PEOPLE.map((p) => optionsFor(ctx.profiles[p], values[p], r, threshold));
   if (!oa.length || !ob.length) return null;
   let best = null;
   for (const a of oa) {
@@ -201,7 +205,7 @@ export function pairDishes(r, ctx, values) {
  */
 export function personalMatches(r, ctx, p, limit = 3) {
   const value = valuesFor(ctx, r.id)?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p]);
-  const opts = optionsFor(ctx.profiles[p], value, r).sort((x, y) => y.value - x.value);
+  const opts = optionsFor(ctx.profiles[p], value, r, relaxed(ctx, r.id) ? 1 : undefined).sort((x, y) => y.value - x.value);
   const strong = opts.filter((o) => o.value >= BOTH_WANT);
   return (strong.length ? strong : opts.slice(0, 1)).slice(0, limit);
 }
@@ -247,9 +251,11 @@ export function scoreRestaurant(r, ctx, opts = {}) {
   const given = valuesFor(ctx, r.id, opts);
   const values = Object.fromEntries(PEOPLE.map((p) => [p, given?.[p] || valueFn(ctx.profiles[p], ctx.rounds?.[p])]));
   const bests = PEOPLE.map((p) => bestFor(ctx.profiles[p], values[p], r));
-  if (bests.some((p) => !p || p.value < CONFIG.qualifyThreshold)) return null;
+  // Stretch tier only needs SOMETHING each of you can eat; normal tiers need a real match.
+  const threshold = relaxed(ctx, r.id) ? 1 : CONFIG.qualifyThreshold;
+  if (bests.some((p) => !p || p.value < threshold)) return null;
   // Ranking uses each person's best dish; the dishes we SHOW are paired to differ where possible.
-  const { picks, share } = pairDishes(r, ctx, values);
+  const { picks, share } = pairDishes(r, ctx, values, threshold);
 
   const [a, b] = bests.map((p) => p.value);
   const W = CONFIG.rankWeights;
@@ -290,7 +296,43 @@ export function finalThree(ctx) {
     fav = rankRestaurants({ ...ctx, fallback: [], sessionRejected: [...(ctx.sessionRejected || []), ...ranked] }, { values: favoriteValues(ctx) }).map((x) => x.id);
   }
   const all = [...ranked, ...fav];
-  return { candidates: all.slice(0, 3), pool: all.slice(3), total: all.length, tonight: ranked.length, fallback: fav };
+  if (all.length) return { candidates: all.slice(0, 3), pool: all.slice(3), total: all.length, tonight: ranked.length, fallback: fav, relaxed: [], saved: null };
+  return stretchThree(ctx);
+}
+
+/**
+ * Last resort when NOTHING matches: never leave you with "zero matches".
+ *  - Two options from your saved favorite foods, with time, budget, styles loosened and radius doubled.
+ *  - Third option: one of your SAVED restaurants (Favorites in your profiles).
+ * Never loosened: blocks, allergies, vegetarian, "Never" foods and tonight's "Nah"s.
+ * The tiles say exactly which rules each one bends (see stretchIssues).
+ */
+export function stretchThree(ctx) {
+  const rc = { ...ctx, relax: true, fallback: [] };
+  const fav = favoriteValues(ctx);
+  const ranked = rankRestaurants(rc, { values: fav }).map((x) => x.id);
+  const two = ranked.slice(0, 2);
+  const savedIds = [...new Set(PEOPLE.flatMap((p) => ctx.profiles[p].favoriteRestaurants || []))];
+  const saved = ranked.find((id) => savedIds.includes(id) && !two.includes(id))
+    || savedIds.find((id) => !two.includes(id) && !excludedFor(ctx, id) && !(ctx.sessionRejected || []).includes(id)
+      && scoreRestaurant(ctx.restaurants.find((r) => r.id === id), rc, { values: fav }))
+    || null;
+  const three = [...two, ...(saved ? [saved] : ranked.slice(2, 3))];
+  const pool = ranked.filter((id) => !three.includes(id));
+  return { candidates: three, pool, total: three.length + pool.length, tonight: 0, fallback: [...three, ...pool], relaxed: [...three, ...pool], saved: saved || null };
+}
+
+/** Which of tonight's rules a stretch pick bends (plain language, shown on its tile). */
+export function stretchIssues(r, ctx) {
+  const strict = { ...ctx, relax: false, relaxedIds: [] };
+  const s = ctx.settings;
+  const out = [];
+  const h = mealHour(s.time, ctx.now);
+  if (!METHODS.some((m) => openAt(r, h, m))) out.push(`Closed at your time — open ${Math.floor(r.hours[0]) % 12 || 12}${r.hours[0] >= 12 ? 'pm' : 'am'}`);
+  else if (!planFor(r, strict)) out.push('Doesn’t fit what you’re up for');
+  if (s.budget && r.price > s.budget * CONFIG.budgetSlack) out.push(`Over budget (~$${r.price})`);
+  if (distanceMiles(s.location, r) > s.radius) out.push('Outside your radius');
+  return out;
 }
 
 /** Human-readable reasons a restaurant matched. */

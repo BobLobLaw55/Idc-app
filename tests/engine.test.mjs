@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { RESTAURANTS, DEMO_REGION } from '../js/data/restaurants.js';
 import { FOODS, FOOD_BY_ID, UPSCALE } from '../js/data/foods.js';
 
-import { buildDeck, partnerFoods, adaptRemaining } from '../js/engine/deck.js';
-import { rankRestaurants, finalThree, scoreRestaurant, personalMatches, appetizerOptions } from '../js/engine/match.js';
+import { buildDeck, partnerFoods, adaptRemaining, bonusFavorites } from '../js/engine/deck.js';
+import { rankRestaurants, finalThree, scoreRestaurant, personalMatches, appetizerOptions, stretchIssues } from '../js/engine/match.js';
 import { resolveEliminations, resolveVotes, findReplacement } from '../js/engine/decide.js';
 
 const SEAFOOD = new Set(FOODS.filter((f) => f.group === 'Seafood').map((f) => f.id));
@@ -403,6 +403,44 @@ test('Votes: veto OR really-want, resolved deterministically', () => {
   assert.equal(run(veto(x), veto(x)).sameVote, true);
   // deterministic
   assert.deepEqual(run(want(x), want(y)), run(want(x), want(y)));
+});
+
+test('All "Nah": 5 bonus cards from saved favorites not yet turned down', () => {
+  const prefs = { steak: 'love', pizza: 'love', wings: 'like', tacos: 'like', burger: 'like', ramen: 'like', sushi: 'never' };
+  const c = ctx({ profiles: { A: { prefs, allergies: [] } } });
+  const deck = ['pizza', 'salad', 'soup'];
+  const round = { deck, answers: { pizza: 'no', salad: 'no', soup: 'no' } };
+  const extra = bonusFavorites(c, 'A', round, 5);
+  assert.equal(extra.length, 5);
+  assert.ok(!extra.includes('pizza'), 'already said Nah');
+  assert.ok(!extra.includes('sushi'), 'Never stays never');
+  assert.equal(extra[0], 'steak', 'Loves first');
+  for (const id of extra) assert.ok(['steak', 'wings', 'tacos', 'burger', 'ramen'].includes(id), id);
+  // few favorites → topped up with nearby foods not yet seen (never dislikes)
+  const few = bonusFavorites(ctx({ profiles: { A: { prefs: { steak: 'love', nachos: 'dislike' }, allergies: [] } } }), 'A', { deck: [], answers: {} }, 5);
+  assert.equal(few.length, 5);
+  assert.equal(few[0], 'steak');
+  assert.ok(!few.includes('nachos'));
+});
+
+test('Zero matches never happens: stretch to favorites ×2 + a saved restaurant', () => {
+  const p = { prefs: { burger: 'love', wings: 'like' }, allergies: [], favoriteRestaurants: ['r13'] };
+  // 7am "ASAP": everything closed; fancy vs delivery: impossible together
+  const c = { ...ctx({ vibes: { A: ['fancy'], B: ['delivery'] }, profiles: { A: p, B: { ...p, favoriteRestaurants: [] } }, rounds: { A: swipe({ salad: 'no' }), B: swipe({}) } }), now: new Date('2026-11-06T07:19:00') };
+  assert.equal(rankRestaurants(c).length, 0);
+  const f = finalThree(c);
+  assert.equal(f.candidates.length, 3);
+  assert.equal(f.saved, 'r13');
+  assert.equal(f.candidates[2], 'r13');
+  for (const id of f.candidates) {
+    const r = RESTAURANTS.find((x) => x.id === id);
+    const x = scoreRestaurant(r, { ...c, fallback: f.fallback, relaxedIds: f.relaxed });
+    assert.ok(x, `${id} scores in the stretch tier`);
+    assert.ok(stretchIssues(r, c).some((t) => t.startsWith('Closed at your time')), id);
+  }
+  // hard rules never bend: blocked places stay out
+  const blocked = { ...c, group: { sharedExclusions: [f.candidates[0]] } };
+  assert.ok(!finalThree(blocked).candidates.includes(f.candidates[0]));
 });
 
 test('Data hygiene: every menu food id exists; all restaurants flagged demo', () => {

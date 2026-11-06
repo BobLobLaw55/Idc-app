@@ -67,7 +67,10 @@ export function buildDeck(ctx, me, { seed, size = CONFIG.deckSize, partnerMap = 
   const rand = rng(seed);
   const profile = ctx.profiles[me];
   const vibes = ctx.vibes?.[me] || [];
-  const local = localFoods(ctx, [me]); // my deck reflects MY styles; partner's stay private
+  let local = localFoods(ctx, [me]); // my deck reflects MY styles; partner's stay private
+  // Nothing open / nothing fits right now? Still deal cards from nearby places (time, budget and
+  // styles loosened, like the stretch tier) so you're never stuck with an empty deck.
+  if (!local.size) local = localFoods({ ...ctx, relax: true }, [me]);
   const pool = FOODS.filter((f) => foodAllowed(profile, f.id) && local.has(f.id));
   const rec = (id) => recentCount(ctx.history, me, id);
   const chosen = [];
@@ -115,6 +118,27 @@ export function buildDeck(ctx, me, { seed, size = CONFIG.deckSize, partnerMap = 
     take(weightedSample(avail(pool.map((f) => ({ id: f.id, w: prefOf(profile, f.id) === 'dislike' ? 0 : 1 }))), size - chosen.length, rand), 'fill');
   }
   return { deck: shuffle(chosen, rand), buckets };
+}
+
+/**
+ * Said "Nah" to everything? Deal up to `n` more cards from my SAVED FAVORITES (Love, then Like)
+ * that I haven't said "Nah" to, preferring foods available nearby tonight. If I don't have enough
+ * favorites, top up with nearby foods I haven't seen yet.
+ */
+export function bonusFavorites(ctx, me, round, n = 5) {
+  const profile = ctx.profiles[me];
+  const local = localFoods(ctx, [me]);
+  const seen = new Set(round.deck);
+  const ok = (id) => !seen.has(id) && round.answers[id] !== 'no' && foodAllowed(profile, id);
+  const rank = { love: 0, like: 1 };
+  const favs = Object.entries(profile.prefs || {})
+    .filter(([id, lvl]) => lvl in rank && ok(id))
+    .sort(([a, la], [b, lb]) => rank[la] - rank[lb] || (local.has(b) - local.has(a)) || a.localeCompare(b))
+    .map(([id]) => id);
+  const extra = favs.length >= n ? [] : FOODS
+    .filter((f) => ok(f.id) && local.has(f.id) && !favs.includes(f.id) && prefOf(profile, f.id) !== 'dislike')
+    .map((f) => f.id);
+  return [...favs, ...extra].slice(0, n);
 }
 
 /**

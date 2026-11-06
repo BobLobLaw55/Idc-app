@@ -1,7 +1,7 @@
 // Session actions: everything that changes shared state goes through here (UI stays dumb).
 import { update, load } from './store.js';
 import { RESTAURANTS, DEMO_REGION } from './data/restaurants.js';
-import { buildDeck, partnerFoods, adaptRemaining } from './engine/deck.js';
+import { buildDeck, partnerFoods, adaptRemaining, bonusFavorites } from './engine/deck.js';
 import { finalThree, PEOPLE } from './engine/match.js';
 import { resolveVotes, findReplacement } from './engine/decide.js';
 import { hashSeed } from './engine/rng.js';
@@ -20,6 +20,7 @@ export function ctxOf(s, extra = {}) {
     settings: s.session ? { ...s.session.settings, drinks: !!(s.session.lube?.A || s.session.lube?.B) } : undefined,
     vibes: s.session?.vibes || {},
     fallback: s.session?.fallback || [], // Final Three places that came from saved favorites
+    relaxedIds: s.session?.relaxed || [], // stretch picks: some rules loosened (nothing else matched)
     group: s.group,
     history: s.history,
     sessionRejected: s.session?.rejected || [],
@@ -175,6 +176,15 @@ export function answer(me, value) {
     r.undo.push({ id, prev: r.answers[id] ?? null, pos: r.pos });
     r.answers[id] = value;
     r.pos = nextUnanswered(r, r.pos + 1);
+    // Nah to everything? Here are up to 5 of your favorites you haven't turned down yet.
+    if (r.pos >= r.deck.length && r.deck.every((d) => r.answers[d] === 'no')) {
+      const extra = bonusFavorites(deckCtx(s, me), me, r, 5);
+      if (extra.length) {
+        r.deck.push(...extra);
+        r.buckets = { ...r.buckets, ...Object.fromEntries(extra.map((x) => [x, 'bonus'])) };
+        r.bonus = (r.bonus || 0) + 1;
+      }
+    }
   });
 }
 
@@ -232,6 +242,8 @@ export function generate() {
     ses.pool = f.pool;
     ses.total = f.total;
     ses.fallback = f.fallback; // filled from saved favorites because tonight's cravings came up short
+    ses.relaxed = f.relaxed || []; // stretch tier: nothing matched, so some rules were loosened
+    ses.saved = f.saved || null; // a saved restaurant used as the third stretch option
     if (f.total > 0 && f.total < 3) ses.short = true;
   });
 }

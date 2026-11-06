@@ -26,6 +26,7 @@ jobs:
           python3 -m http.server 8765 >/dev/null 2>&1 &
           sleep 1
           node tests/e2e.mjs http://localhost:8765/
+          node tests/e2e-edge.mjs http://localhost:8765/
       - name: Food photo URLs resolve
         run: node tests/check-photos.mjs
 
@@ -52,4 +53,6 @@ jobs:
       - name: Install Playwright
         run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
       - name: Two-tab end-to-end test (live site)
-        run: node tests/e2e.mjs https://bobloblaw55.github.io/Idc-app/
+        run: |
+          node tests/e2e.mjs https://bobloblaw55.github.io/Idc-app/
+          node tests/e2e-edge.mjs https://bobloblaw55.github.io/Idc-app/
